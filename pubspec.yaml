@@ -1,0 +1,70 @@
+# ============================================================
+# pubspec.yaml — PoultryCare Flutter App
+# Place this file at the ROOT of your Flutter project folder.
+# Run: flutter pub get  after placing this file.
+# ============================================================
+
+name: poultrycare_app
+description: "PoultryCare — IoT Smart Feeding & Environmental Control for Poultry Farms"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # ── Firebase Core (required for ALL Firebase features) ──────────────────────
+  firebase_core: ^2.27.0
+
+  # ── Firebase Auth (for login/logout) ───────────────────────────────────────
+  firebase_auth: ^4.17.8
+
+  # ── Firebase Realtime Database (live sensor data, schedules, logs) ──────────
+  firebase_database: ^10.4.9
+
+  # ── Firebase Cloud Messaging (push notifications for alerts) ───────────────
+  firebase_messaging: ^14.7.18
+
+  # ── Local notifications (show FCM alerts while app is in foreground) ───────
+  flutter_local_notifications: ^17.0.0
+
+  # ── State management (Provider pattern) ────────────────────────────────────
+  provider: ^6.1.2
+
+  # ── Shared preferences (store simple local settings like user prefs) ───────
+  shared_preferences: ^2.2.3
+
+  # ── Gauge/chart widget for temperature display ─────────────────────────────
+  syncfusion_flutter_gauges: ^25.1.35
+
+  # ── Intl for date/time formatting ──────────────────────────────────────────
+  intl: ^0.19.0
+
+  # ── Google fonts ───────────────────────────────────────────────────────────
+  google_fonts: ^6.2.1
+
+  # ── Animated icons and lottie (optional, for splash/loading animations) ───
+  lottie: ^3.1.0
+
+  # ── Flutter SVG support ────────────────────────────────────────────────────
+  flutter_svg: ^2.0.10+1
+
+  # ── Cupertino icons (iOS-style icons) ─────────────────────────────────────
+  cupertino_icons: ^1.0.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+
+  # ── Asset folders (create these folders in your project root) ──────────────
+  assets:
+    - assets/images/       # App images (logo, icons, background)
+    - assets/animations/   # Lottie JSON animation files (optional)
