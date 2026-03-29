@@ -1,10 +1,8 @@
 // ============================================================
-// lib/screens/logs_screen.dart
+// lib/screens/logs_screen.dart  — REDESIGNED (Dark Alerts)
 // ============================================================
-// Tab 3: Logs / Activity History
-// Shows the latest 50 activity log entries from Firebase.
-// Entries are categorized as: Feeding, Alert, Climate, Water, Info.
-// The farmer can filter by type using chips at the top.
+// Styled as "Alerts" screen matching the design mockup.
+// Groups logs by Today / Yesterday / Older.
 // ============================================================
 
 import 'package:flutter/material.dart';
@@ -20,204 +18,342 @@ class LogsScreen extends StatefulWidget {
 }
 
 class _LogsScreenState extends State<LogsScreen> {
-  // null means "show all types"
   LogType? _filterType;
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List<ActivityLog>>(
-      stream: FirebaseService().logsStream(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF0D1B2A), Color(0xFF112233)],
+        ),
+      ),
+      child: StreamBuilder<List<ActivityLog>>(
+        stream: FirebaseService().logsStream(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
+            return const Center(
+                child: CircularProgressIndicator(
+                    color: AppColors.primary));
+          }
 
-        final allLogs = snapshot.data ?? [];
+          final allLogs = snapshot.data ?? [];
+          final unreadCount =
+              allLogs.where((l) => !l.isRead).length;
 
-        // Apply filter
-        final logs = _filterType == null
-            ? allLogs
-            : allLogs.where((l) => l.type == _filterType).toList();
+          final logs = _filterType == null
+              ? allLogs
+              : allLogs
+                  .where((l) => l.type == _filterType)
+                  .toList();
 
-        return Column(
-          children: [
-            // ── Header + filter chips ─────────────────────────────────
-            Container(
-              color: AppColors.background,
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+          // Group by date
+          final today = <ActivityLog>[];
+          final yesterday = <ActivityLog>[];
+          final older = <ActivityLog>[];
+
+          final now = DateTime.now();
+          final todayStart =
+              DateTime(now.year, now.month, now.day);
+          final yesterdayStart =
+              todayStart.subtract(const Duration(days: 1));
+
+          for (final log in logs) {
+            final dt =
+                DateTime.fromMillisecondsSinceEpoch(log.timestamp);
+            if (dt.isAfter(todayStart)) {
+              today.add(log);
+            } else if (dt.isAfter(yesterdayStart)) {
+              yesterday.add(log);
+            } else {
+              older.add(log);
+            }
+          }
+
+          return CustomScrollView(
+            slivers: [
+              // ── Header ──────────────────────────────────
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 52, 20, 16),
+                  child: Row(
                     children: [
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Activity Log',
-                                style:
-                                    Theme.of(context).textTheme.titleLarge),
-                            Text('${allLogs.length} total entries',
-                                style:
-                                    Theme.of(context).textTheme.bodyMedium),
+                            const Text(
+                              'Alerts',
+                              style: TextStyle(
+                                fontSize: 26,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                              ),
+                            ),
+                            if (unreadCount > 0)
+                              Text(
+                                '$unreadCount unread notification${unreadCount > 1 ? 's' : ''}',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
                           ],
                         ),
                       ),
-                      // Mark all read button
-                      TextButton.icon(
-                        onPressed: () => FirebaseService().markAllLogsRead(),
-                        icon: const Icon(Icons.done_all, size: 16),
-                        label: const Text('Mark all read'),
-                        style: TextButton.styleFrom(
-                          foregroundColor: AppColors.textSecondary,
-                          textStyle: const TextStyle(fontSize: 12),
+                      if (unreadCount > 0)
+                        GestureDetector(
+                          onTap: () => FirebaseService().markAllLogsRead(),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: AppColors.surface,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                  color: AppColors.border),
+                            ),
+                            child: const Text(
+                              'Mark As All Read',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
                         ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // ── Filter chips ─────────────────────────────
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: 40,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16),
+                    children: [
+                      _FilterChip(
+                        label: 'All',
+                        isSelected: _filterType == null,
+                        onTap: () =>
+                            setState(() => _filterType = null),
+                        color: AppColors.textSecondary,
+                      ),
+                      const SizedBox(width: 8),
+                      _FilterChip(
+                        label: 'Alerts',
+                        isSelected: _filterType == LogType.alert,
+                        onTap: () => setState(
+                            () => _filterType = LogType.alert),
+                        color: AppColors.error,
+                      ),
+                      const SizedBox(width: 8),
+                      _FilterChip(
+                        label: 'Feeding',
+                        isSelected: _filterType == LogType.feeding,
+                        onTap: () => setState(
+                            () => _filterType = LogType.feeding),
+                        color: AppColors.feederActive,
+                      ),
+                      const SizedBox(width: 8),
+                      _FilterChip(
+                        label: 'Climate',
+                        isSelected: _filterType == LogType.climate,
+                        onTap: () => setState(
+                            () => _filterType = LogType.climate),
+                        color: AppColors.heatingActive,
+                      ),
+                      const SizedBox(width: 8),
+                      _FilterChip(
+                        label: 'Water',
+                        isSelected: _filterType == LogType.water,
+                        onTap: () => setState(
+                            () => _filterType = LogType.water),
+                        color: AppColors.waterActive,
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
-                  // Filter chips row
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
+                ),
+              ),
+
+              const SliverToBoxAdapter(child: SizedBox(height: 16)),
+
+              // ── Empty state ──────────────────────────────
+              if (logs.isEmpty)
+                SliverFillRemaining(
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        _FilterChip(
-                          label: 'All',
-                          isSelected: _filterType == null,
-                          onTap: () => setState(() => _filterType = null),
-                          color: AppColors.textSecondary,
+                        Icon(Icons.notifications_off_outlined,
+                            size: 56,
+                            color: AppColors.textTertiary),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'No alerts yet',
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                        const SizedBox(width: 8),
-                        _FilterChip(
-                          label: 'Alerts',
-                          isSelected: _filterType == LogType.alert,
-                          onTap: () =>
-                              setState(() => _filterType = LogType.alert),
-                          color: AppColors.error,
-                        ),
-                        const SizedBox(width: 8),
-                        _FilterChip(
-                          label: 'Feeding',
-                          isSelected: _filterType == LogType.feeding,
-                          onTap: () =>
-                              setState(() => _filterType = LogType.feeding),
-                          color: AppColors.feederActive,
-                        ),
-                        const SizedBox(width: 8),
-                        _FilterChip(
-                          label: 'Climate',
-                          isSelected: _filterType == LogType.climate,
-                          onTap: () =>
-                              setState(() => _filterType = LogType.climate),
-                          color: AppColors.heatingActive,
-                        ),
-                        const SizedBox(width: 8),
-                        _FilterChip(
-                          label: 'Water',
-                          isSelected: _filterType == LogType.water,
-                          onTap: () =>
-                              setState(() => _filterType = LogType.water),
-                          color: AppColors.waterActive,
+                        const SizedBox(height: 8),
+                        const Text(
+                          'System activity will appear here.',
+                          style: TextStyle(
+                              color: AppColors.textTertiary,
+                              fontSize: 13),
                         ),
                       ],
                     ),
                   ),
-                ],
-              ),
-            ),
+                ),
 
-            // ── Log list ──────────────────────────────────────────────
-            Expanded(
-              child: logs.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text('📋',
-                              style: TextStyle(fontSize: 48)),
-                          const SizedBox(height: 16),
-                          Text('No logs yet',
-                              style:
-                                  Theme.of(context).textTheme.titleMedium),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Activity from the system will\nappear here.',
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                        ],
-                      ),
-                    )
-                  : ListView.separated(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      itemCount: logs.length,
-                      separatorBuilder: (_, __) => const Divider(
-                        indent: 72,
-                        endIndent: 16,
-                        height: 1,
-                      ),
-                      itemBuilder: (context, index) {
-                        return _LogTile(log: logs[index]);
-                      },
-                    ),
-            ),
-          ],
-        );
-      },
+              // ── Today group ──────────────────────────────
+              if (today.isNotEmpty) ...[
+                _SectionHeader(label: 'TODAY'),
+                SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) =>
+                        _LogTile(log: today[index]),
+                    childCount: today.length,
+                  ),
+                ),
+              ],
+
+              // ── Yesterday group ──────────────────────────
+              if (yesterday.isNotEmpty) ...[
+                _SectionHeader(label: 'YESTERDAY'),
+                SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) =>
+                        _LogTile(log: yesterday[index]),
+                    childCount: yesterday.length,
+                  ),
+                ),
+              ],
+
+              // ── Older group ──────────────────────────────
+              if (older.isNotEmpty) ...[
+                _SectionHeader(label: 'OLDER'),
+                SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) =>
+                        _LogTile(log: older[index]),
+                    childCount: older.length,
+                  ),
+                ),
+              ],
+
+              const SliverToBoxAdapter(child: SizedBox(height: 32)),
+            ],
+          );
+        },
+      ),
     );
   }
 }
 
-// ── Individual log tile ───────────────────────────────────────────────────────
+// ── Section header ────────────────────────────────────────────
+class _SectionHeader extends StatelessWidget {
+  final String label;
+  const _SectionHeader({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+        child: Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textTertiary,
+            letterSpacing: 0.8,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Individual log tile ───────────────────────────────────────
 class _LogTile extends StatelessWidget {
   final ActivityLog log;
   const _LogTile({required this.log});
 
-  // Return emoji icon for the log type.
-  String get _emoji {
+  Color get _color {
     switch (log.type) {
-      case LogType.feeding:  return '🌾';
-      case LogType.alert:    return '🌡️';
-      case LogType.climate:  return '💡';
-      case LogType.water:    return '💧';
-      default:               return '📡';
+      case LogType.alert:
+        return AppColors.error;
+      case LogType.feeding:
+        return AppColors.feederActive;
+      case LogType.climate:
+        return AppColors.heatingActive;
+      case LogType.water:
+        return AppColors.waterActive;
+      default:
+        return AppColors.info;
     }
   }
 
-  // Return color for the log type badge.
-  Color get _color {
+  IconData get _icon {
     switch (log.type) {
-      case LogType.feeding:  return AppColors.feederActive;
-      case LogType.alert:    return AppColors.error;
-      case LogType.climate:  return AppColors.heatingActive;
-      case LogType.water:    return AppColors.waterActive;
-      default:               return AppColors.info;
+      case LogType.alert:
+        return Icons.warning_rounded;
+      case LogType.feeding:
+        return Icons.grain_rounded;
+      case LogType.climate:
+        return Icons.thermostat_rounded;
+      case LogType.water:
+        return Icons.water_drop_rounded;
+      default:
+        return Icons.info_outline_rounded;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: log.type == LogType.alert
+            ? AppColors.error.withOpacity(0.08)
+            : AppColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: log.type == LogType.alert
+              ? AppColors.error.withOpacity(0.2)
+              : AppColors.border,
+        ),
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Emoji icon with colored circle ────────────────────────
+          // Icon
           Container(
-            width: 42,
-            height: 42,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
-              color: _color.withOpacity(0.12),
-              shape: BoxShape.circle,
+              color: _color.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Center(
-              child: Text(_emoji, style: const TextStyle(fontSize: 18)),
-            ),
+            child: Icon(_icon, color: _color, size: 20),
           ),
 
           const SizedBox(width: 12),
 
-          // ── Title, message, timestamp ─────────────────────────────
+          // Content
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -227,17 +363,15 @@ class _LogTile extends StatelessWidget {
                     Expanded(
                       child: Text(
                         log.title,
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleMedium
-                            ?.copyWith(
-                                fontSize: 14,
-                                color: log.type == LogType.alert
-                                    ? AppColors.error
-                                    : null),
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: log.type == LogType.alert
+                              ? AppColors.error
+                              : Colors.white,
+                        ),
                       ),
                     ),
-                    // Unread dot
                     if (!log.isRead)
                       Container(
                         width: 8,
@@ -249,17 +383,22 @@ class _LogTile extends StatelessWidget {
                       ),
                   ],
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  log.message,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontSize: 13,
-                      ),
-                ),
                 const SizedBox(height: 4),
                 Text(
+                  log.message,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
                   log.timeLabel,
-                  style: Theme.of(context).textTheme.bodySmall,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textTertiary,
+                  ),
                 ),
               ],
             ),
@@ -270,7 +409,7 @@ class _LogTile extends StatelessWidget {
   }
 }
 
-// ── Filter chip widget ────────────────────────────────────────────────────────
+// ── Filter chip ───────────────────────────────────────────────
 class _FilterChip extends StatelessWidget {
   final String label;
   final bool isSelected;
@@ -291,12 +430,13 @@ class _FilterChip extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.12) : AppColors.surface,
+          color: isSelected ? color.withOpacity(0.15) : AppColors.surface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? color.withOpacity(0.4) : AppColors.border,
+            color:
+                isSelected ? color.withOpacity(0.4) : AppColors.border,
           ),
         ),
         child: Text(
@@ -304,7 +444,7 @@ class _FilterChip extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w600,
-            color: isSelected ? color : AppColors.textSecondary,
+            color: isSelected ? color : AppColors.textTertiary,
           ),
         ),
       ),
