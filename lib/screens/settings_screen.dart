@@ -130,7 +130,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.backgroundWarm,
+      backgroundColor: Colors.transparent,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: const Text('Settings'),
         actions: [
@@ -156,10 +157,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.symmetric(vertical: 16),
+      body: SizedBox(
+        height: double.infinity,
+        width: double.infinity,
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFF0D1B2A),
+              Color(0xFF2B527B),
+              Color(0xFF9DA2A8),
+            ],
+          ),
+        ),
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : ListView(
+                  padding: const EdgeInsets.only(
+                  top: 120,
+                  bottom: 16,
+  ),
               children: [
                 // ── Section: Temperature ───────────────────────────────
                 const _SectionHeader('TEMPERATURE THRESHOLDS'),
@@ -205,7 +224,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ],
                 ),
 
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
 
                 // ── Section: Automation ────────────────────────────────
                 const _SectionHeader('AUTOMATION'),
@@ -310,6 +329,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(height: 24),
               ],
             ),
+        ),
+      ),
     );
   }
 }

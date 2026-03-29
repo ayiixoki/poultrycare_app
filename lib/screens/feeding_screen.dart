@@ -281,9 +281,18 @@ class _ScheduleFormSheetState extends State<_ScheduleFormSheet> {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      gradient: LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Color(0xFF0D1B2A),
+          Color(0xFF2B527B),
+          Color(0xFF9DA2A8),
+        ],
+        stops: [0.0, 0.5, 1.0],
       ),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),

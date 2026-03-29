@@ -27,7 +27,12 @@ class _LogsScreenState extends State<LogsScreen> {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFF0D1B2A), Color(0xFF112233)],
+           colors: [
+              Color(0xFF0D1B2A),
+              Color(0xFF2B527B),
+              Color(0xFF9DA2A8),
+            ],
+          stops: [0.0, 0.5, 1.0],
         ),
       ),
       child: StreamBuilder<List<ActivityLog>>(

@@ -15,6 +15,7 @@ import '../utils/app_colors.dart';
 import '../utils/constants.dart';
 import '../widgets/feed_level_bar.dart';
 import 'settings_screen.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -54,14 +55,19 @@ class DashboardScreen extends StatelessWidget {
           alertMessage = 'Feed Running Low! Refill needed soon.';
         }
 
-        return Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Color(0xFF0D1B2A), Color(0xFF112233)],
-            ),
-          ),
+            return Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0xFF0D1B2A),
+                    Color(0xFF2B527B),
+                    Color(0xFF949BA4),
+                  ],
+                  stops: [0.0, 0.5, 1.0],
+                ),
+              ),
           child: isLoading
               ? const Center(
                   child: CircularProgressIndicator(color: AppColors.primary))
@@ -154,13 +160,19 @@ class DashboardScreen extends StatelessWidget {
                           onPressed: data.feederActive
                               ? null
                               : () => _quickDispense(context),
+                              style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color.fromARGB(255, 24, 67, 110), // ← change this color
+                            ),
                           icon: const Icon(Icons.grain_rounded),
-                          label: Text(data.feederActive
-                              ? 'Dispensing...'
-                              : 'Quick Dispense Feed'),
+                          label: Text(
+                              data.feederActive
+                                  ? 'Dispensing...'
+                                  : 'Quick Dispense Feed',
+                              style: const TextStyle(color: Colors.white),
+                            ),                        
+                          ),
                         ),
                       ),
-                    ),
                   ],
                 ),
         );
@@ -169,65 +181,59 @@ class DashboardScreen extends StatelessWidget {
   }
 
   Widget _buildHeader(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 52, 20, 16),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Hello,',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.white.withOpacity(0.5),
-                    fontWeight: FontWeight.w400,
-                  ),
+  return Padding(
+    padding: const EdgeInsets.fromLTRB(20, 52, 20, 16),
+    child: Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Hello,',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontSize: 14,
+                  height: 1.5,
+                  color: Colors.white.withOpacity(0.5),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  _userName,
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Profile avatar + settings
-          GestureDetector(
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SettingsScreen()),
-            ),
-            child: Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: AppColors.primary,
-                shape: BoxShape.circle,
               ),
-              child: Center(
-                child: Text(
-                  _userName.isNotEmpty
-                      ? _userName[0].toUpperCase()
-                      : 'F',
-                  style: const TextStyle(
-                    color: AppColors.textOnPrimary,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 18,
-                  ),
+              const SizedBox(height: 7),
+              Text(
+                _userName,
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+            ],
+          ),
+        ),
+        // Profile avatar + settings
+        GestureDetector(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const SettingsScreen()),
+          ),
+          child: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: const Color.fromARGB(255, 255, 255, 255),
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(
+                _userName.isNotEmpty
+                    ? _userName[0].toUpperCase()
+                    : 'F',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: AppColors.textOnPrimary,
                 ),
               ),
             ),
           ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
 
   void _quickDispense(BuildContext context) async {
     try {
@@ -305,13 +311,13 @@ class _AlertBanner extends StatelessWidget {
                 color: Colors.white, size: 18),
           ),
           const SizedBox(width: 12),
+          const SizedBox(width: 12),
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(  // ← CHANGE
                 color: Colors.white,
                 fontWeight: FontWeight.w700,
-                fontSize: 13,
               ),
             ),
           ),
@@ -367,10 +373,8 @@ class _SensorCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   label,
-                  style: const TextStyle(
-                    fontSize: 12,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(  // ← CHANGE
                     color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ),
@@ -382,15 +386,14 @@ class _SensorCard extends StatelessWidget {
           // Main value
           Text(
             value,
-            style: const TextStyle(
-              fontSize: 28,
+             style: Theme.of(context).textTheme.displaySmall?.copyWith(  // ← CHANGE
+              fontSize: 23,
               fontWeight: FontWeight.w800,
-              color: Colors.white,
               height: 1,
             ),
           ),
 
-          const SizedBox(height: 6),
+          const SizedBox(height: 15),
 
           // Status badge
           Container(
@@ -402,7 +405,7 @@ class _SensorCard extends StatelessWidget {
             ),
             child: Text(
               statusLabel,
-              style: TextStyle(
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(  // ← CHANGE
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
                 color: statusColor,
@@ -427,10 +430,9 @@ class _DeviceStatesRow extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'DEVICE STATES',
-            style: TextStyle(
-              fontSize: 11,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(  // ← CHANGE
               fontWeight: FontWeight.w700,
               color: AppColors.textTertiary,
               letterSpacing: 0.8,
@@ -500,12 +502,13 @@ class _DeviceChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
-        color: isActive ? color.withOpacity(0.15) : AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isActive ? color.withOpacity(0.3) : AppColors.border,
-        ),
-      ),
+  color: isActive ? color.withOpacity(0.25) : const Color(0xFF1E3A5C),
+  borderRadius: BorderRadius.circular(14),
+  border: Border.all(
+    color: isActive ? color : const Color(0xFF2A5080),
+    width: 1.5,
+  ),
+),
       child: Column(
         children: [
           Icon(icon,
@@ -515,7 +518,7 @@ class _DeviceChip extends StatelessWidget {
           Text(
             label,
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(  // ← CHANGE
               fontSize: 10,
               fontWeight: FontWeight.w600,
               color: isActive ? color : AppColors.textTertiary,
@@ -525,7 +528,7 @@ class _DeviceChip extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             isActive ? 'ON' : 'OFF',
-            style: TextStyle(
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(  // ← CHANGE
               fontSize: 10,
               fontWeight: FontWeight.w700,
               color: isActive ? color : AppColors.textTertiary,

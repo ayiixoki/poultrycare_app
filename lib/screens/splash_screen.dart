@@ -26,8 +26,9 @@ class _SplashScreenState extends State<SplashScreen>
   late Animation<double> _fadeAnim;
   late Animation<double> _slideAnim;
 
-  // If user is already logged in, skip the splash and go home.
-  bool _alreadyLoggedIn = false;
+  // Track if we're checking auth or already navigating
+  bool _isCheckingAuth = true;
+  bool _isLoggedIn = false;
 
   @override
   void initState() {
@@ -48,31 +49,39 @@ class _SplashScreenState extends State<SplashScreen>
 
     _controller.forward();
 
-    // Check if already logged in — if so, auto-navigate after 1.5s
+    // Check auth state
+    _checkAuthState();
+  }
+
+  Future<void> _checkAuthState() async {
     final user = FirebaseAuth.instance.currentUser;
+    
+    setState(() {
+      _isCheckingAuth = false;
+      _isLoggedIn = user != null;
+    });
+
+    // If user is logged in, auto-navigate after showing splash for a moment
     if (user != null) {
-      _alreadyLoggedIn = true;
-      Future.delayed(const Duration(milliseconds: 2500), () {
+      Future.delayed(const Duration(milliseconds: 2000), () {
         if (!mounted) return;
-        Navigator.of(context).pushReplacement(
-          PageRouteBuilder(
-            pageBuilder: (_, __, ___) => const HomeScreen(),
-            transitionsBuilder: (_, animation, __, child) =>
-                FadeTransition(opacity: animation, child: child),
-            transitionDuration: const Duration(milliseconds: 500),
-          ),
-        );
+        _navigateToHome();
       });
     }
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+  void _navigateToHome() {
+    Navigator.of(context).pushReplacement(
+      PageRouteBuilder(
+        pageBuilder: (_, __, ___) => const HomeScreen(),
+        transitionsBuilder: (_, animation, __, child) =>
+            FadeTransition(opacity: animation, child: child),
+        transitionDuration: const Duration(milliseconds: 500),
+      ),
+    );
   }
 
-  void _goToLogin() {
+  void _navigateToLogin() {
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         pageBuilder: (_, __, ___) => const LoginScreen(),
@@ -84,12 +93,17 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
         width: double.infinity,
         height: double.infinity,
-        // Dark navy gradient background
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
@@ -99,6 +113,7 @@ class _SplashScreenState extends State<SplashScreen>
               Color.fromARGB(255, 43, 82, 123),
               Color.fromARGB(255, 157, 162, 168),
             ],
+            stops: [0.0, 0.5, 1.0],
           ),
         ),
         child: SafeArea(
@@ -113,12 +128,11 @@ class _SplashScreenState extends State<SplashScreen>
                     children: [
                       const Spacer(flex: 2),
 
-                      // ── Logo image ─────────────────────────────
-                      // Uses your uploaded chicken logo
+                      // Logo image
                       Container(
                         width: 180,
                         height: 180,
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                           shape: BoxShape.circle,
                           color: Colors.transparent,
                         ),
@@ -126,7 +140,6 @@ class _SplashScreenState extends State<SplashScreen>
                           'assets/images/logochick.png',
                           fit: BoxFit.contain,
                           errorBuilder: (context, error, stackTrace) {
-                            // Fallback if logo.png not found yet
                             return Container(
                               width: 180,
                               height: 180,
@@ -147,7 +160,7 @@ class _SplashScreenState extends State<SplashScreen>
 
                       const SizedBox(height: 32),
 
-                      // ── App name ───────────────────────────────
+                      // App name
                       Text(
                         AppConstants.appName,
                         style: const TextStyle(
@@ -160,7 +173,7 @@ class _SplashScreenState extends State<SplashScreen>
 
                       const SizedBox(height: 8),
 
-                      // ── Tagline ────────────────────────────────
+                      // Tagline
                       Text(
                         'Smart Poultry Management',
                         style: TextStyle(
@@ -173,46 +186,51 @@ class _SplashScreenState extends State<SplashScreen>
 
                       const Spacer(flex: 3),
 
-                      // ── Get Started button or loading indicator ─
+                      // Get Started button or loading indicator
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 32),
-                        child: _alreadyLoggedIn
-                            ? Column(
-                                children: [
-                                  const CircularProgressIndicator(
-                                    color: AppColors.primary,
-                                    strokeWidth: 2,
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Text(
-                                    'Loading...',
-                                    style: TextStyle(
-                                      color: Colors.white.withOpacity(0.5),
-                                      fontSize: 13,
+                        child: _isCheckingAuth
+                            ? const CircularProgressIndicator(
+                                color: AppColors.primary,
+                                strokeWidth: 2,
+                              )
+                            : _isLoggedIn
+                                ? Column(
+                                    children: [
+                                      const CircularProgressIndicator(
+                                        color: AppColors.primary,
+                                        strokeWidth: 2,
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        'Loading your farm...',
+                                        style: TextStyle(
+                                          color: Colors.white.withOpacity(0.7),
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                : ElevatedButton(
+                                    onPressed: _navigateToLogin,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.white,
+                                      foregroundColor: AppColors.background,
+                                      minimumSize: const Size(double.infinity, 56),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      elevation: 0,
+                                    ),
+                                    child: const Text(
+                                      'Get Started',
+                                      style: TextStyle(
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF0D1B2A),
+                                      ),
                                     ),
                                   ),
-                                ],
-                              )
-                            : ElevatedButton(
-                                onPressed: _goToLogin,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.white,
-                                  foregroundColor: AppColors.background,
-                                  minimumSize: const Size(double.infinity, 56),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  elevation: 0,
-                                ),
-                                child: const Text(
-                                  'Get Started',
-                                  style: TextStyle(
-                                    fontSize: 17,
-                                    fontWeight: FontWeight.w700,
-                                    color: Color(0xFF0D1B2A),
-                                  ),
-                                ),
-                              ),
                       ),
 
                       const SizedBox(height: 48),

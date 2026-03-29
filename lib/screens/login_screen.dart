@@ -73,13 +73,18 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
+    backgroundColor: const Color(0xFF9DA2A8), // ← match the bottom gradient color
+    body: Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color(0xFF0D1B2A), Color(0xFF112233)],
+             colors: [
+              Color(0xFF0D1B2A),
+              Color(0xFF2B527B),
+              Color(0xFF9DA2A8),
+            ],
+              stops: [0.0, 0.7, 1.0],
           ),
         ),
         child: SafeArea(
@@ -106,7 +111,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(24),
                           child: Image.asset(
-                            'assets/images/logo.png',
+                            'assets/images/logochick.png',
                             fit: BoxFit.contain,
                             errorBuilder: (_, __, ___) => const Center(
                               child: Text('🐔',

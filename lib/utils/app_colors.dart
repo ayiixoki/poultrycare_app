@@ -7,6 +7,11 @@ import 'package:flutter/material.dart';
 class AppColors {
   AppColors._();
 
+  // ── Gradient colors ───────────────────────────────────────────
+  static const Color gradientTop = Color(0xFF0D1B2A);
+  static const Color gradientMid = Color(0xFF2B527B);
+  static const Color gradientBottom = Color.fromARGB(255, 137, 150, 165);
+
   // ── Primary Brand ─────────────────────────────────────────
   static const Color primary = Color(0xFF4DD9C0);
   static const Color primaryDark = Color(0xFF2BB8A0);
@@ -41,9 +46,9 @@ class AppColors {
 
   // ── Devices ───────────────────────────────────────────────
   static const Color heatingActive = Color(0xFFFF6B35);
-  static const Color coolingActive = Color(0xFF4DD9C0);
+  static const Color coolingActive = Color(0xFF0A414F);
   static const Color feederActive = Color(0xFFF5A623);
-  static const Color waterActive = Color(0xFF4A9FFF);
+  static const Color waterActive = Color(0xD01B7BE9);
 
   // ── Alerts ────────────────────────────────────────────────
   static const Color alertCritical = Color(0xFFFF3B3B);
@@ -52,6 +57,5 @@ class AppColors {
 
   // ── Misc ──────────────────────────────────────────────────
   static const Color shadow = Color(0x40000000);
-  static const Color gradientTop = Color(0xFF0D1B2A);
-  static const Color gradientBottom = Color(0xFF112233);
+  
 }
