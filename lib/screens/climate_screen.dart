@@ -1,15 +1,6 @@
 // ============================================================
 // lib/screens/climate_screen.dart
 // ============================================================
-// Tab 2: Climate
-// Shows detailed temperature & humidity data and allows the
-// farmer to manually override the heating lamp and cooling fan.
-//
-// When "Auto Climate" is enabled, the Arduino handles heating/
-// cooling automatically based on the thresholds in /settings/.
-// Manual toggles here directly write to Firebase, and the
-// Arduino reads them within ~1 second.
-// ============================================================
 
 import 'package:flutter/material.dart';
 import '../models/sensor_data.dart';
@@ -31,106 +22,121 @@ class ClimateScreen extends StatelessWidget {
 
         final data = snapshot.data ?? const SensorData();
 
-        return ListView(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          children: [
-            // ── Page title ────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Climate Control',
-                      style: Theme.of(context).textTheme.titleLarge),
-                  const SizedBox(height: 4),
-                  Text('Real-time environment monitoring',
-                      style: Theme.of(context).textTheme.bodyMedium),
-                ],
-              ),
-            ),
-
-            // ── Big temperature display ───────────────────────────────
-            _BigTemperatureCard(
-              temperature: data.temperature,
-              humidity: data.humidity,
-            ),
-
-            const SizedBox(height: 16),
-
-            // ── Threshold info card ───────────────────────────────────
-            _ThresholdCard(
-              currentTemp: data.temperature,
-              minTemp: AppConstants.defaultMinTemp,
-              maxTemp: AppConstants.defaultMaxTemp,
-            ),
-
-            const SizedBox(height: 20),
-
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Text(
-                'DEVICE CONTROLS',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textTertiary,
-                  letterSpacing: 0.8,
+        return Container(
+          color: const Color(0xFFF5F0E8),
+          child: ListView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            children: [
+              // ── Page title ─────────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Climate Control',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.black,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Real-time environment monitoring',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.black.withOpacity(0.5),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
 
-            // ── Heating lamp toggle card ──────────────────────────────
-            _DeviceControlCard(
-              icon: Icons.lightbulb_outlined,
-              activeIcon: Icons.lightbulb,
-              title: 'Heating Lamp',
-              subtitle: data.heatingLamp
-                  ? 'Active — keeping temperature up'
-                  : 'Off — temperature is in range',
-              isActive: data.heatingLamp,
-              activeColor: AppColors.heatingActive,
-              onToggle: (value) => FirebaseService().setHeatingLamp(value),
-            ),
+              // ── Big temperature card ───────────────────────────
+              _BigTemperatureCard(
+                temperature: data.temperature,
+                humidity: data.humidity,
+              ),
 
-            const SizedBox(height: 10),
+              const SizedBox(height: 12),
 
-            // ── Cooling fan toggle card ───────────────────────────────
-            _DeviceControlCard(
-              icon: Icons.air,
-              activeIcon: Icons.air,
-              title: 'Cooling Fan',
-              subtitle: data.coolingFan
-                  ? 'Active — ventilating the house'
-                  : 'Off — temperature is in range',
-              isActive: data.coolingFan,
-              activeColor: AppColors.coolingActive,
-              onToggle: (value) => FirebaseService().setCoolingFan(value),
-            ),
+              // ── Threshold card ─────────────────────────────────
+              _ThresholdCard(
+                currentTemp: data.temperature,
+                minTemp: AppConstants.defaultMinTemp,
+                maxTemp: AppConstants.defaultMaxTemp,
+              ),
 
-            const SizedBox(height: 10),
+              const SizedBox(height: 20),
 
-            // ── Water dispenser toggle card ───────────────────────────
-            _DeviceControlCard(
-              icon: Icons.water_drop_outlined,
-              activeIcon: Icons.water_drop,
-              title: 'Water Dispenser',
-              subtitle: data.waterActive
-                  ? 'Open — water is flowing'
-                  : 'Closed — valve is shut',
-              isActive: data.waterActive,
-              activeColor: AppColors.waterActive,
-              onToggle: (value) => FirebaseService().setWaterDispenser(value),
-            ),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 0, 20, 10),
+                child: Text(
+                  'DEVICE CONTROLS',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textTertiary,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ),
 
-            const SizedBox(height: 32),
-          ],
+              // ── Heating lamp ───────────────────────────────────
+              _DeviceControlCard(
+                icon: Icons.lightbulb_outlined,
+                activeIcon: Icons.lightbulb,
+                title: 'Heating Lamp',
+                subtitle: data.heatingLamp
+                    ? 'Active — keeping temperature up'
+                    : 'Off — temperature is in range',
+                isActive: data.heatingLamp,
+                activeColor: AppColors.heatingActive,
+                onToggle: (v) => FirebaseService().setHeatingLamp(v),
+              ),
+
+              const SizedBox(height: 10),
+
+              // ── Cooling fan ────────────────────────────────────
+              _DeviceControlCard(
+                icon: Icons.air,
+                activeIcon: Icons.air,
+                title: 'Cooling Fan',
+                subtitle: data.coolingFan
+                    ? 'Active — ventilating the house'
+                    : 'Off — temperature is in range',
+                isActive: data.coolingFan,
+                activeColor: AppColors.coolingActive,
+                onToggle: (v) => FirebaseService().setCoolingFan(v),
+              ),
+
+              const SizedBox(height: 10),
+
+              // ── Water dispenser ────────────────────────────────
+              _DeviceControlCard(
+                icon: Icons.water_drop_outlined,
+                activeIcon: Icons.water_drop,
+                title: 'Water Dispenser',
+                subtitle: data.waterActive
+                    ? 'Open — water is flowing'
+                    : 'Closed — valve is shut',
+                isActive: data.waterActive,
+                activeColor: AppColors.waterActive,
+                onToggle: (v) => FirebaseService().setWaterDispenser(v),
+              ),
+
+              const SizedBox(height: 32),
+            ],
+          ),
         );
       },
     );
   }
 }
 
-// ── Big temperature display card ──────────────────────────────────────────────
+// ── Big temperature card ───────────────────────────────────────────────────────
 class _BigTemperatureCard extends StatelessWidget {
   final double temperature;
   final double humidity;
@@ -140,7 +146,6 @@ class _BigTemperatureCard extends StatelessWidget {
     required this.humidity,
   });
 
-  // Color of the temperature value based on safety range.
   Color get _tempColor {
     if (temperature > AppConstants.defaultMaxTemp) return AppColors.error;
     if (temperature < AppConstants.defaultMinTemp) return AppColors.info;
@@ -153,22 +158,19 @@ class _BigTemperatureCard extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-              Color(0xFF0D1B2A),
-              Color.fromARGB(255, 43, 82, 123),
-              Color.fromARGB(255, 157, 162, 168),
-            ],
-            stops: [0.0, 0.5, 1.0],
-        ),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _tempColor.withOpacity(0.2)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         children: [
-          // Temperature display
+          // Temperature
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -177,9 +179,13 @@ class _BigTemperatureCard extends StatelessWidget {
                   children: [
                     Icon(Icons.thermostat, color: _tempColor, size: 20),
                     const SizedBox(width: 8),
-                    Text(
+                    const Text(
                       'Temperature',
-                      style: Theme.of(context).textTheme.bodyMedium,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black,
+                      ),
                     ),
                   ],
                 ),
@@ -189,31 +195,30 @@ class _BigTemperatureCard extends StatelessWidget {
                     children: [
                       TextSpan(
                         text: temperature.toStringAsFixed(1),
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 52,
                           fontWeight: FontWeight.w700,
-                          color: _tempColor,
+                          color: Colors.black,
                           height: 1,
                         ),
                       ),
-                      TextSpan(
+                      const TextSpan(
                         text: '°C',
                         style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w600,
-                          color: _tempColor.withOpacity(0.7),
+                          color: Colors.black,
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 8),
-                // Status label
+                const SizedBox(height: 10),
                 Container(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: _tempColor.withOpacity(0.1),
+                    color: _tempColor.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
@@ -235,14 +240,18 @@ class _BigTemperatureCard extends StatelessWidget {
           ),
 
           // Divider
-          Container(width: 1, height: 80, color: AppColors.border),
+          Container(
+            width: 1,
+            height: 90,
+            color: Colors.black.withOpacity(0.08),
+          ),
           const SizedBox(width: 24),
 
-          // Humidity display
+          // Humidity
           Column(
             children: [
-              const Icon(Icons.water_drop_outlined,
-                  color: AppColors.info, size: 24),
+              Icon(Icons.water_drop_outlined,
+                  color: Colors.black.withOpacity(0.6), size: 24),
               const SizedBox(height: 8),
               RichText(
                 text: TextSpan(
@@ -252,7 +261,7 @@ class _BigTemperatureCard extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 32,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.info,
+                        color: Colors.black,
                       ),
                     ),
                     const TextSpan(
@@ -260,7 +269,7 @@ class _BigTemperatureCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.info,
+                        color: Colors.black,
                       ),
                     ),
                   ],
@@ -269,7 +278,10 @@ class _BigTemperatureCard extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 'Humidity',
-                style: Theme.of(context).textTheme.bodySmall,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.black.withOpacity(0.5),
+                ),
               ),
             ],
           ),
@@ -279,7 +291,7 @@ class _BigTemperatureCard extends StatelessWidget {
   }
 }
 
-// ── Min/Max threshold info card ───────────────────────────────────────────────
+// ── Threshold card ─────────────────────────────────────────────────────────────
 class _ThresholdCard extends StatelessWidget {
   final double currentTemp;
   final double minTemp;
@@ -293,34 +305,48 @@ class _ThresholdCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Fraction of how far along the current temp is in the safe range.
     final safeRange = maxTemp - minTemp;
-    final posInRange = ((currentTemp - minTemp) / safeRange).clamp(0.0, 1.0);
+    final posInRange =
+        ((currentTemp - minTemp) / safeRange).clamp(0.0, 1.0);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surfaceElevated,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Safe Temperature Range',
-              style: Theme.of(context).textTheme.titleMedium),
+          const Text(
+            'Safe Temperature Range',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: Colors.black,
+            ),
+          ),
           const SizedBox(height: 4),
           Text(
             'Target: ${minTemp.toStringAsFixed(0)}°C – ${maxTemp.toStringAsFixed(0)}°C',
-            style: Theme.of(context).textTheme.bodyMedium,
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.black.withOpacity(0.5),
+            ),
           ),
           const SizedBox(height: 14),
 
-          // Custom range bar with current position marker
           Stack(
+            clipBehavior: Clip.none,
             children: [
-              // Background bar (full range, grey)
               ClipRRect(
                 borderRadius: BorderRadius.circular(6),
                 child: Container(
@@ -328,30 +354,26 @@ class _ThresholdCard extends StatelessWidget {
                   decoration: const BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
-                        AppColors.info,    // cold (blue)
-                        AppColors.success, // safe (green)
-                        AppColors.error,   // hot (red)
+                        AppColors.info,
+                        AppColors.success,
+                        AppColors.error,
                       ],
                     ),
                   ),
                 ),
               ),
-
-              // Position marker
               Positioned(
-                left: MediaQuery.of(context).size.width *
-                        posInRange *
-                        0.75 - // scale for padding
-                    6,
+                left: (MediaQuery.of(context).size.width - 64) *
+                        posInRange -
+                    9,
                 top: -3,
                 child: Container(
                   width: 18,
                   height: 18,
                   decoration: BoxDecoration(
-                    color: AppColors.background,
+                    color: Colors.white,
                     shape: BoxShape.circle,
-                    border: Border.all(
-                        color: AppColors.textPrimary, width: 2.5),
+                    border: Border.all(color: Colors.black, width: 2.5),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withOpacity(0.15),
@@ -366,25 +388,24 @@ class _ThresholdCard extends StatelessWidget {
 
           const SizedBox(height: 8),
 
-          // Labels under the bar
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('${minTemp.toStringAsFixed(0)}°C',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: AppColors.info)),
-              Text('Optimal Zone',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: AppColors.success)),
+                  style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.info,
+                      fontWeight: FontWeight.w600)),
+              const Text('Optimal Zone',
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: AppColors.success,
+                      fontWeight: FontWeight.w600)),
               Text('${maxTemp.toStringAsFixed(0)}°C',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: AppColors.error)),
+                  style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.error,
+                      fontWeight: FontWeight.w600)),
             ],
           ),
         ],
@@ -393,7 +414,7 @@ class _ThresholdCard extends StatelessWidget {
   }
 }
 
-// ── Device control toggle card ────────────────────────────────────────────────
+// ── Device control card ────────────────────────────────────────────────────────
 class _DeviceControlCard extends StatelessWidget {
   final IconData icon;
   final IconData activeIcon;
@@ -419,14 +440,15 @@ class _DeviceControlCard extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: isActive
-            ? activeColor.withOpacity(0.06)
-            : AppColors.surfaceElevated,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color:
-              isActive ? activeColor.withOpacity(0.25) : AppColors.border,
-        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -435,8 +457,9 @@ class _DeviceControlCard extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color:
-                  isActive ? activeColor.withOpacity(0.15) : AppColors.backgroundWarm,
+              color: isActive
+                  ? activeColor.withOpacity(0.12)
+                  : Colors.black.withOpacity(0.05),
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -453,20 +476,31 @@ class _DeviceControlCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(subtitle,
-                    style: Theme.of(context).textTheme.bodyMedium),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.black.withOpacity(0.5),
+                  ),
+                ),
               ],
             ),
           ),
 
-          // Toggle switch
+          // Toggle
           Switch(
             value: isActive,
             onChanged: onToggle,
-            activeThumbColor: activeColor,
+            activeColor: activeColor,
           ),
         ],
       ),

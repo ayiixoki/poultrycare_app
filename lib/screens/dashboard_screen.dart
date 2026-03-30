@@ -61,16 +61,15 @@ class DashboardScreen extends StatelessWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Color(0xFF0D1B2A),
-                    Color(0xFF2B527B),
-                    Color(0xFF949BA4),
+                    Color(0xFFF5F0E8),
+                    Color(0xFFF5F0E8),
                   ],
-                  stops: [0.0, 0.5, 1.0],
+                  stops: [0.0, 2.0],
                 ),
               ),
           child: isLoading
               ? const Center(
-                  child: CircularProgressIndicator(color: AppColors.primary))
+                  child: CircularProgressIndicator(color: Color.fromARGB(255, 215, 196, 47)))
               : CustomScrollView(
                   slivers: [
                     // ── Custom header ──────────────────────────
@@ -102,7 +101,7 @@ class DashboardScreen extends StatelessWidget {
                             value: '${data.temperature.toStringAsFixed(0)}°C',
                             statusLabel: _tempStatus(data.temperature),
                             statusColor: _tempColor(data.temperature),
-                            iconColor: _tempColor(data.temperature),
+                            iconColor: Color(0xFFE9CD31),
                           ),
                           _SensorCard(
                             icon: Icons.water_drop_rounded,
@@ -110,7 +109,7 @@ class DashboardScreen extends StatelessWidget {
                             value: '${data.humidity.toStringAsFixed(0)}%',
                             statusLabel: _humStatus(data.humidity),
                             statusColor: _humColor(data.humidity),
-                            iconColor: AppColors.info,
+                            iconColor: Color(0xFFE9CD31), 
                           ),
                           _SensorCard(
                             icon: Icons.schedule_rounded,
@@ -118,7 +117,7 @@ class DashboardScreen extends StatelessWidget {
                             value: _lastFed(data.lastFeedTime),
                             statusLabel: 'Most recent feed',
                             statusColor: AppColors.feederActive,
-                            iconColor: AppColors.feederActive,
+                            iconColor: Color(0xFFE9CD31),
                           ),
                           _SensorCard(
                             icon: Icons.water_rounded,
@@ -130,7 +129,7 @@ class DashboardScreen extends StatelessWidget {
                             statusColor: data.waterLevel == 'FULL'
                                 ? AppColors.success
                                 : AppColors.error,
-                            iconColor: AppColors.waterActive,
+                            iconColor: Color(0xFFE9CD31),
                           ),
                         ]),
                       ),
@@ -161,14 +160,14 @@ class DashboardScreen extends StatelessWidget {
                               ? null
                               : () => _quickDispense(context),
                               style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color.fromARGB(255, 24, 67, 110), // ← change this color
+                              backgroundColor: const Color(0xFFFFC933),
                             ),
                           icon: const Icon(Icons.grain_rounded),
                           label: Text(
                               data.feederActive
                                   ? 'Dispensing...'
-                                  : 'Quick Dispense Feed',
-                              style: const TextStyle(color: Colors.white),
+                                  : 'Dispense Feed',
+                              style: const TextStyle(color: Color(0xFF000000)),
                             ),                        
                           ),
                         ),
@@ -192,15 +191,19 @@ class DashboardScreen extends StatelessWidget {
               Text(
                 'Hello,',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontSize: 14,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
                   height: 1.5,
-                  color: Colors.white.withOpacity(0.5),
+                  color: Colors.black.withOpacity(1.0),
                 ),
               ),
-              const SizedBox(height: 7),
+              const SizedBox(height: 1),
               Text(
                 _userName,
-                style: Theme.of(context).textTheme.headlineMedium,
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                )
               ),
             ],
           ),
@@ -215,7 +218,7 @@ class DashboardScreen extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: const Color.fromARGB(255, 255, 255, 255),
+              color: const Color(0xFFFFC933),
               shape: BoxShape.circle,
             ),
             child: Center(
@@ -224,6 +227,8 @@ class DashboardScreen extends StatelessWidget {
                     ? _userName[0].toUpperCase()
                     : 'F',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 18,
                   color: AppColors.textOnPrimary,
                 ),
               ),
@@ -243,7 +248,7 @@ class DashboardScreen extends StatelessWidget {
         SnackBar(
           content: Text(
               'Dispensing feed for ${AppConstants.quickDispenseSeconds}s...'),
-          backgroundColor: AppColors.success,
+          backgroundColor: const Color.fromARGB(255, 92, 252, 129),
         ),
       );
     } catch (_) {
@@ -350,9 +355,9 @@ class _SensorCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surfaceElevated,
+        color: const Color.fromARGB(255, 235, 235, 235),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: const Color.fromARGB(255, 206, 209, 213)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -364,10 +369,10 @@ class _SensorCard extends StatelessWidget {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: iconColor.withOpacity(0.15),
+                  color: iconColor.withOpacity(0.40),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, color: iconColor, size: 18),
+                child: Icon(icon, color: iconColor, size: 20),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -375,6 +380,8 @@ class _SensorCard extends StatelessWidget {
                   label,
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(  // ← CHANGE
                     color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
                   ),
                 ),
               ),
@@ -387,9 +394,9 @@ class _SensorCard extends StatelessWidget {
           Text(
             value,
              style: Theme.of(context).textTheme.displaySmall?.copyWith(  // ← CHANGE
-              fontSize: 23,
-              fontWeight: FontWeight.w800,
-              height: 1,
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+              height: 2,
             ),
           ),
 
@@ -400,14 +407,14 @@ class _SensorCard extends StatelessWidget {
             padding:
                 const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.15),
+              color: statusColor.withOpacity(0.40),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
               statusLabel,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(  // ← CHANGE
                 fontSize: 11,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
                 color: statusColor,
               ),
             ),
@@ -433,8 +440,9 @@ class _DeviceStatesRow extends StatelessWidget {
           Text(
             'DEVICE STATES',
             style: Theme.of(context).textTheme.labelSmall?.copyWith(  // ← CHANGE
-              fontWeight: FontWeight.w700,
-              color: AppColors.textTertiary,
+              fontWeight: FontWeight.w900,
+              fontSize: 10,
+              color: const Color.fromARGB(255, 0, 0, 0),
               letterSpacing: 0.8,
             ),
           ),
@@ -502,26 +510,26 @@ class _DeviceChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
-  color: isActive ? color.withOpacity(0.25) : const Color(0xFF1E3A5C),
+  color: isActive ? color.withOpacity(0.25) : const Color.fromARGB(255, 232, 232, 232),
   borderRadius: BorderRadius.circular(14),
   border: Border.all(
-    color: isActive ? color : const Color(0xFF2A5080),
+    color: isActive ? color : const Color.fromARGB(255, 230, 229, 229),
     width: 1.5,
   ),
 ),
       child: Column(
         children: [
           Icon(icon,
-              color: isActive ? color : AppColors.textTertiary,
+              color: isActive ? color : const Color(0xFFBFBFBF),
               size: 20),
           const SizedBox(height: 4),
           Text(
             label,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(  // ← CHANGE
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: isActive ? color : AppColors.textTertiary,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: isActive ? color : const Color(0xFFBFBFBF),
               height: 1.2,
             ),
           ),
@@ -531,7 +539,7 @@ class _DeviceChip extends StatelessWidget {
             style: Theme.of(context).textTheme.labelSmall?.copyWith(  // ← CHANGE
               fontSize: 10,
               fontWeight: FontWeight.w700,
-              color: isActive ? color : AppColors.textTertiary,
+              color: isActive ? color : const Color(0xFFBFBFBF),
             ),
           ),
         ],

@@ -8,35 +8,34 @@ class AppColors {
   AppColors._();
 
   // ── Gradient colors ───────────────────────────────────────────
-  static const Color gradientTop = Color(0xFF0D1B2A);
-  static const Color gradientMid = Color(0xFF2B527B);
-  static const Color gradientBottom = Color.fromARGB(255, 137, 150, 165);
+  static const Color gradientTop = Color(0xFFDAE62F);
+  static const Color gradientBottom = Color(0xFFD2B335);
 
   // ── Primary Brand ─────────────────────────────────────────
-  static const Color primary = Color(0xFF4DD9C0);
-  static const Color primaryDark = Color(0xFF2BB8A0);
-  static const Color primaryLight = Color(0xFF1A3A3A);
+  static const Color primary = Color.fromARGB(255, 255, 217, 0);
+  static const Color primaryDark = Color.fromARGB(255, 0, 0, 0);
+  static const Color primaryLight = Color.fromARGB(255, 182, 182, 182);
 
   // ── Backgrounds ───────────────────────────────────────────
-  static const Color background = Color(0xFF0D1B2A);
-  static const Color backgroundWarm = Color(0xFF112233);
-  static const Color surface = Color(0xFF1A2E44);
-  static const Color surfaceElevated = Color(0xFF1E3448);
-  static const Color surfaceHighlight = Color(0xFF243D55);
+  static const Color background = Color(0xFFF7F7F7);
+  static const Color backgroundWarm = Color(0xFFF7F7F7);
+  static const Color surface = Color.fromARGB(255, 240, 240, 240);
+  static const Color surfaceElevated = Color(0xFFF7F7F7);
+  static const Color surfaceHighlight = Color.fromARGB(255, 247, 247, 247);
 
   // ── Text ──────────────────────────────────────────────────
-  static const Color textPrimary = Color(0xFFFFFFFF);
-  static const Color textSecondary = Color(0xFFB0C4D8);
-  static const Color textTertiary = Color(0xFF6B8CAE);
-  static const Color textOnPrimary = Color(0xFF0D1B2A);
+  static const Color textPrimary = Color(0xFF000000);
+  static const Color textSecondary = Color.fromARGB(255, 0, 0, 0);
+  static const Color textTertiary = Color.fromARGB(255, 0, 0, 0);
+  static const Color textOnPrimary = Color.fromARGB(255, 0, 0, 0);
 
   // ── Borders ───────────────────────────────────────────────
-  static const Color border = Color(0xFF1E3448);
-  static const Color divider = Color(0xFF1A2E44);
+  static const Color border = Color.fromARGB(255, 34, 36, 39);
+  static const Color divider = Color.fromARGB(255, 57, 57, 57);
 
   // ── Status ────────────────────────────────────────────────
-  static const Color success = Color(0xFF4DD9C0);
-  static const Color successLight = Color(0xFF0D2A25);
+  static const Color success = Color(0xFF37F764);
+  static const Color successLight = Color.fromARGB(255, 209, 218, 105);
   static const Color warning = Color(0xFFF5A623);
   static const Color warningLight = Color(0xFF2A1F0A);
   static const Color error = Color(0xFFFF5252);
@@ -56,6 +55,6 @@ class AppColors {
   static const Color alertInfo = Color(0xFF4A9FFF);
 
   // ── Misc ──────────────────────────────────────────────────
-  static const Color shadow = Color(0x40000000);
+  static const Color shadow = Color.fromARGB(255, 200, 199, 196);
   
 }

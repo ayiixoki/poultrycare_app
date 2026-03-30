@@ -19,11 +19,10 @@ class GradientBackground extends StatelessWidget {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            AppColors.gradientTop,    // dark navy
-            AppColors.gradientMid,    // medium blue
-            AppColors.gradientBottom, // light grey-blue
+            AppColors.gradientTop,    
+            AppColors.gradientBottom, 
           ],
-          stops: [0.0, 0.5, 1.0],
+          stops: [0.0, 1.0],
         ),
       ),
       child: child,

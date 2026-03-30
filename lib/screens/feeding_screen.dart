@@ -25,7 +25,7 @@ class FeedingScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.backgroundWarm,
+      backgroundColor: const Color(0xFFF5F0E8),
       floatingActionButton: FloatingActionButton.extended(
         // FAB to add a new feeding schedule.
         onPressed: () => _showScheduleSheet(context, null),
@@ -285,11 +285,10 @@ class _ScheduleFormSheetState extends State<_ScheduleFormSheet> {
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          Color(0xFF0D1B2A),
-          Color(0xFF2B527B),
-          Color(0xFF9DA2A8),
+           Color.fromARGB(255, 214, 219, 150),
+            Color.fromARGB(255, 197, 189, 155),
         ],
-        stops: [0.0, 0.5, 1.0],
+        stops: [0.0, 1.0],
       ),
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
@@ -354,7 +353,7 @@ class _ScheduleFormSheetState extends State<_ScheduleFormSheet> {
                   child: Row(
                     children: [
                       const Icon(Icons.schedule,
-                          color: AppColors.primary, size: 20),
+                          color: Color.fromARGB(255, 255, 217, 0), size: 20),
                       const SizedBox(width: 12),
                       Text(
                         _selectedTime.format(context),
@@ -414,7 +413,7 @@ class _ScheduleFormSheetState extends State<_ScheduleFormSheet> {
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: isSelected ? AppColors.primary : AppColors.surface,
+                        color: isSelected ? const Color.fromARGB(255, 252, 225, 73) : AppColors.surface,
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
                           color: isSelected ? AppColors.primary : AppColors.border,

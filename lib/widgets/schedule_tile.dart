@@ -75,7 +75,7 @@ class ScheduleTile extends StatelessWidget {
         color: schedule.enabled ? AppColors.surfaceElevated : AppColors.backgroundWarm,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: schedule.enabled ? AppColors.primary.withOpacity(0.25) : AppColors.border,
+          color: schedule.enabled ? const Color.fromARGB(255, 137, 137, 137).withOpacity(0.25) : const Color.fromARGB(255, 206, 206, 206),
         ),
         boxShadow: schedule.enabled
             ? [const BoxShadow(color: AppColors.shadow, blurRadius: 6, offset: Offset(0, 2))]
@@ -92,7 +92,7 @@ class ScheduleTile extends StatelessWidget {
               decoration: BoxDecoration(
                 color: schedule.enabled
                     ? AppColors.primaryLight
-                    : AppColors.border.withOpacity(0.3),
+                    : const Color.fromARGB(255, 52, 52, 52).withOpacity(0.3),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Column(
@@ -149,7 +149,7 @@ class ScheduleTile extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: AppColors.primaryLight,
+                      color: const Color(0xFFE9CD31),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -187,7 +187,7 @@ class ScheduleTile extends StatelessWidget {
                       value: 'edit',
                       child: Row(
                         children: [
-                          Icon(Icons.edit_outlined, size: 18),
+                          Icon(Icons.edit_outlined, size: 18, color: Color(0xFF000000),),
                           SizedBox(width: 10),
                           Text('Edit'),
                         ],

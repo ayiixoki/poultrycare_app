@@ -1,18 +1,6 @@
 // ============================================================
 // lib/screens/settings_screen.dart
 // ============================================================
-// Settings screen accessible from the AppBar gear icon.
-// Allows the farmer to configure:
-//   • Minimum safe temperature threshold
-//   • Maximum safe temperature threshold
-//   • Auto Climate mode (Arduino controls heating/cooling)
-//   • Auto Feeding mode (Arduino follows schedules automatically)
-//   • Sign out
-//
-// Settings are stored in Firebase under /settings/ so the
-// Arduino also reads them (min_temp and max_temp control the
-// automatic heating/cooling logic on the microcontroller).
-// ============================================================
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -29,11 +17,9 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  // ── State variables ───────────────────────────────────────────────────────
-  bool _isLoading = true;   // true while fetching settings from Firebase
-  bool _isSaving = false;   // true while saving changes to Firebase
+  bool _isLoading = true;
+  bool _isSaving = false;
 
-  // Settings values — initialized from Firebase, then editable here.
   double _minTemp = AppConstants.defaultMinTemp;
   double _maxTemp = AppConstants.defaultMaxTemp;
   bool _autoClimate = true;
@@ -45,7 +31,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadSettings();
   }
 
-  // ── Load current settings from Firebase ──────────────────────────────────
   Future<void> _loadSettings() async {
     try {
       final data = await FirebaseService().getSettings();
@@ -63,7 +48,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  // ── Save changed settings to Firebase ────────────────────────────────────
   Future<void> _saveSettings() async {
     setState(() => _isSaving = true);
     try {
@@ -90,9 +74,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  // ── Sign out ──────────────────────────────────────────────────────────────
   Future<void> _signOut() async {
-    // Show confirmation dialog first.
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -120,7 +102,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await FirebaseAuth.instance.signOut();
     if (!mounted) return;
 
-    // Navigate back to LoginScreen, clearing the entire stack.
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginScreen()),
       (route) => false,
@@ -130,12 +111,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
-      extendBodyBehindAppBar: true,
+      backgroundColor: const Color(0xFFF5F0E8),
       appBar: AppBar(
-        title: const Text('Settings'),
+        backgroundColor: const Color(0xFFF5F0E8),
+        elevation: 0,
+        title: const Text(
+          'Settings',
+          style: TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.w800,
+            fontSize: 20,
+          ),
+        ),
+        iconTheme: const IconThemeData(color: Colors.black),
         actions: [
-          // Save button in the AppBar
           if (!_isLoading)
             TextButton(
               onPressed: _isSaving ? null : _saveSettings,
@@ -157,34 +146,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: SizedBox(
-        height: double.infinity,
-        width: double.infinity,
-        child: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF0D1B2A),
-              Color(0xFF2B527B),
-              Color(0xFF9DA2A8),
-            ],
-          ),
-        ),
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : ListView(
-                  padding: const EdgeInsets.only(
-                  top: 120,
-                  bottom: 16,
-  ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.only(top: 8, bottom: 32),
               children: [
-                // ── Section: Temperature ───────────────────────────────
+                // ── Temperature ──────────────────────────────────────
                 const _SectionHeader('TEMPERATURE THRESHOLDS'),
                 _SettingsCard(
                   children: [
-                    // Min temperature slider
                     _SliderRow(
                       label: 'Min Temperature',
                       value: _minTemp,
@@ -194,7 +165,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       onChanged: (v) {
                         setState(() {
                           _minTemp = v;
-                          // Ensure min doesn't exceed max.
                           if (_minTemp >= _maxTemp) _maxTemp = _minTemp + 1;
                         });
                       },
@@ -202,8 +172,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           'Heating lamp activates when temp falls below this.',
                       activeColor: AppColors.info,
                     ),
-                    const Divider(height: 1),
-                    // Max temperature slider
+                    const Divider(height: 1, indent: 16, endIndent: 16),
                     _SliderRow(
                       label: 'Max Temperature',
                       value: _maxTemp,
@@ -213,7 +182,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       onChanged: (v) {
                         setState(() {
                           _maxTemp = v;
-                          // Ensure max doesn't go below min.
                           if (_maxTemp <= _minTemp) _minTemp = _maxTemp - 1;
                         });
                       },
@@ -226,7 +194,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 const SizedBox(height: 10),
 
-                // ── Section: Automation ────────────────────────────────
+                // ── Automation ───────────────────────────────────────
                 const _SectionHeader('AUTOMATION'),
                 _SettingsCard(
                   children: [
@@ -239,7 +207,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       value: _autoClimate,
                       onChanged: (v) => setState(() => _autoClimate = v),
                     ),
-                    const Divider(height: 1),
+                    const Divider(height: 1, indent: 16, endIndent: 16),
                     _ToggleRow(
                       icon: Icons.grain,
                       iconColor: AppColors.feederActive,
@@ -252,13 +220,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ],
                 ),
 
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
 
-                // ── Section: Account ───────────────────────────────────
+                // ── Account ──────────────────────────────────────────
                 const _SectionHeader('ACCOUNT'),
                 _SettingsCard(
                   children: [
-                    // Currently signed-in user email
                     Padding(
                       padding: const EdgeInsets.all(16),
                       child: Row(
@@ -280,15 +247,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               children: [
                                 Text(
                                   'Signed in as',
-                                  style: Theme.of(context).textTheme.bodySmall,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.black.withOpacity(0.5),
+                                  ),
                                 ),
                                 Text(
                                   FirebaseAuth.instance.currentUser?.email ??
                                       'Unknown',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleMedium
-                                      ?.copyWith(fontSize: 14),
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.black,
+                                  ),
                                 ),
                               ],
                             ),
@@ -301,7 +272,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 const SizedBox(height: 16),
 
-                // ── Sign out button ────────────────────────────────────
+                // ── Sign out ─────────────────────────────────────────
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: OutlinedButton.icon(
@@ -310,18 +281,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     label: const Text('Sign Out',
                         style: TextStyle(color: AppColors.error)),
                     style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppColors.error),
+                      backgroundColor: Colors.white,
+                      side: BorderSide(
+                          color: AppColors.error.withOpacity(0.4)),
                     ),
                   ),
                 ),
 
-                const SizedBox(height: 32),
+                const SizedBox(height: 24),
 
-                // ── App version ────────────────────────────────────────
+                // ── Version ──────────────────────────────────────────
                 Center(
                   child: Text(
                     'PoultryCare v${AppConstants.appVersion} — Pampanga State University',
-                    style: Theme.of(context).textTheme.bodySmall,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.black.withOpacity(0.35),
+                    ),
                     textAlign: TextAlign.center,
                   ),
                 ),
@@ -329,13 +305,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(height: 24),
               ],
             ),
-        ),
-      ),
     );
   }
 }
 
-// ── Section header label ──────────────────────────────────────────────────────
+// ── Section header ─────────────────────────────────────────────────────────────
 class _SectionHeader extends StatelessWidget {
   final String text;
   const _SectionHeader(this.text);
@@ -343,7 +317,7 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
       child: Text(
         text,
         style: const TextStyle(
@@ -357,7 +331,7 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-// ── Card wrapper for settings groups ─────────────────────────────────────────
+// ── Settings card ──────────────────────────────────────────────────────────────
 class _SettingsCard extends StatelessWidget {
   final List<Widget> children;
   const _SettingsCard({required this.children});
@@ -367,16 +341,22 @@ class _SettingsCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: AppColors.surfaceElevated,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(children: children),
     );
   }
 }
 
-// ── Slider row for temperature thresholds ─────────────────────────────────────
+// ── Slider row ─────────────────────────────────────────────────────────────────
 class _SliderRow extends StatelessWidget {
   final String label;
   final double value;
@@ -408,12 +388,18 @@ class _SliderRow extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(label,
-                    style: Theme.of(context).textTheme.titleMedium),
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black,
+                  ),
+                ),
               ),
-              // Current value badge
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: activeColor.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
@@ -429,7 +415,6 @@ class _SliderRow extends StatelessWidget {
               ),
             ],
           ),
-          // Slider — steps in 0.5°C increments
           Slider(
             value: value,
             min: min,
@@ -438,15 +423,20 @@ class _SliderRow extends StatelessWidget {
             activeColor: activeColor,
             onChanged: onChanged,
           ),
-          Text(description,
-              style: Theme.of(context).textTheme.bodySmall),
+          Text(
+            description,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.black.withOpacity(0.5),
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-// ── Toggle row for automation settings ───────────────────────────────────────
+// ── Toggle row ─────────────────────────────────────────────────────────────────
 class _ToggleRow extends StatelessWidget {
   final IconData icon;
   final Color iconColor;
@@ -484,13 +474,22 @@ class _ToggleRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(subtitle,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontSize: 12,
-                        )),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.black.withOpacity(0.5),
+                  ),
+                ),
               ],
             ),
           ),

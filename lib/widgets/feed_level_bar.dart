@@ -37,7 +37,7 @@ class FeedLevelBar extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surfaceElevated,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: const Color.fromARGB(255, 203, 203, 203)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -89,7 +89,7 @@ class FeedLevelBar extends StatelessWidget {
                           style: const TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.w800,
-                            color: Colors.white,
+                            color: Colors.black,
                           ),
                         ),
                         const TextSpan(
@@ -126,7 +126,7 @@ class FeedLevelBar extends StatelessWidget {
                 return LinearProgressIndicator(
                   value: value,
                   minHeight: 10,
-                  backgroundColor: AppColors.border,
+                  backgroundColor: const Color.fromARGB(255, 201, 203, 204),
                   valueColor: AlwaysStoppedAnimation(_barColor),
                 );
               },

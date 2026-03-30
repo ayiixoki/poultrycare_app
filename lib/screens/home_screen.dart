@@ -70,9 +70,9 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: const Color.fromARGB(255, 233, 230, 224),
           border: const Border(
-            top: BorderSide(color: AppColors.border, width: 1),
+            top: BorderSide(color: Color.fromARGB(255, 0, 0, 0), width: 1),
           ),
           boxShadow: [
             BoxShadow(
@@ -98,7 +98,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? AppColors.primary.withOpacity(0.12)
+                          ? const Color.fromARGB(255, 240, 224, 132).withOpacity(0.12)
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(12),
                     ),

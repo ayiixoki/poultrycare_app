@@ -1,8 +1,5 @@
 // ============================================================
-// lib/screens/logs_screen.dart  — REDESIGNED (Dark Alerts)
-// ============================================================
-// Styled as "Alerts" screen matching the design mockup.
-// Groups logs by Today / Yesterday / Older.
+// lib/screens/logs_screen.dart
 // ============================================================
 
 import 'package:flutter/material.dart';
@@ -22,252 +19,252 @@ class _LogsScreenState extends State<LogsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-           colors: [
-              Color(0xFF0D1B2A),
-              Color(0xFF2B527B),
-              Color(0xFF9DA2A8),
-            ],
-          stops: [0.0, 0.5, 1.0],
-        ),
-      ),
-      child: StreamBuilder<List<ActivityLog>>(
-        stream: FirebaseService().logsStream(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting &&
-              !snapshot.hasData) {
-            return const Center(
-                child: CircularProgressIndicator(
-                    color: AppColors.primary));
-          }
-
-          final allLogs = snapshot.data ?? [];
-          final unreadCount =
-              allLogs.where((l) => !l.isRead).length;
-
-          final logs = _filterType == null
-              ? allLogs
-              : allLogs
-                  .where((l) => l.type == _filterType)
-                  .toList();
-
-          // Group by date
-          final today = <ActivityLog>[];
-          final yesterday = <ActivityLog>[];
-          final older = <ActivityLog>[];
-
-          final now = DateTime.now();
-          final todayStart =
-              DateTime(now.year, now.month, now.day);
-          final yesterdayStart =
-              todayStart.subtract(const Duration(days: 1));
-
-          for (final log in logs) {
-            final dt =
-                DateTime.fromMillisecondsSinceEpoch(log.timestamp);
-            if (dt.isAfter(todayStart)) {
-              today.add(log);
-            } else if (dt.isAfter(yesterdayStart)) {
-              yesterday.add(log);
-            } else {
-              older.add(log);
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F0E8),
+      body: SafeArea(
+        child: StreamBuilder<List<ActivityLog>>(
+          stream: FirebaseService().logsStream(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                !snapshot.hasData) {
+              return const Center(
+                child: CircularProgressIndicator(color: AppColors.primary),
+              );
             }
-          }
 
-          return CustomScrollView(
-            slivers: [
-              // ── Header ──────────────────────────────────
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 52, 20, 16),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+            final allLogs = snapshot.data ?? [];
+            final unreadCount = allLogs.where((l) => !l.isRead).length;
+
+            final logs = _filterType == null
+                ? allLogs
+                : allLogs.where((l) => l.type == _filterType).toList();
+
+            // Group by date
+            final today = <ActivityLog>[];
+            final yesterday = <ActivityLog>[];
+            final older = <ActivityLog>[];
+
+            final now = DateTime.now();
+            final todayStart = DateTime(now.year, now.month, now.day);
+            final yesterdayStart =
+                todayStart.subtract(const Duration(days: 1));
+
+            for (final log in logs) {
+              final dt =
+                  DateTime.fromMillisecondsSinceEpoch(log.timestamp);
+              if (dt.isAfter(todayStart)) {
+                today.add(log);
+              } else if (dt.isAfter(yesterdayStart)) {
+                yesterday.add(log);
+              } else {
+                older.add(log);
+              }
+            }
+
+            return CustomScrollView(
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                // ── Header ────────────────────────────────────
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
                           children: [
-                            const Text(
-                              'Alerts',
-                              style: TextStyle(
-                                fontSize: 26,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Alerts',
+                                    style: TextStyle(
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.w900,
+                                      color: Colors.black,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    unreadCount > 0
+                                        ? '$unreadCount unread notification${unreadCount > 1 ? 's' : ''}'
+                                        : '0 unread notifications',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            if (unreadCount > 0)
-                              Text(
-                                '$unreadCount unread notification${unreadCount > 1 ? 's' : ''}',
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: AppColors.textSecondary,
+                            GestureDetector(
+                              onTap: () => FirebaseService().markAllLogsRead(),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 14, vertical: 9),
+                                  decoration: BoxDecoration(
+                                    color: unreadCount > 0 
+                                      ? const Color(0xFFB8F5B0)  // ← light green when has notifs
+                                      : Colors.white, 
+                                    borderRadius:
+                                        BorderRadius.circular(12),
+                                    border: Border.all(
+                                        color: AppColors.border),
+                                  ),
+                                  child: const Text(
+                                    'Mark As All Read',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black,
+                                    ),
+                                  ),
                                 ),
                               ),
                           ],
-                        ),
-                      ),
-                      if (unreadCount > 0)
-                        GestureDetector(
-                          onTap: () => FirebaseService().markAllLogsRead(),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: AppColors.surface,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                  color: AppColors.border),
-                            ),
-                            child: const Text(
-                              'Mark As All Read',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // ── Filter chips ─────────────────────────────
-              SliverToBoxAdapter(
-                child: SizedBox(
-                  height: 40,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16),
-                    children: [
-                      _FilterChip(
-                        label: 'All',
-                        isSelected: _filterType == null,
-                        onTap: () =>
-                            setState(() => _filterType = null),
-                        color: AppColors.textSecondary,
-                      ),
-                      const SizedBox(width: 8),
-                      _FilterChip(
-                        label: 'Alerts',
-                        isSelected: _filterType == LogType.alert,
-                        onTap: () => setState(
-                            () => _filterType = LogType.alert),
-                        color: AppColors.error,
-                      ),
-                      const SizedBox(width: 8),
-                      _FilterChip(
-                        label: 'Feeding',
-                        isSelected: _filterType == LogType.feeding,
-                        onTap: () => setState(
-                            () => _filterType = LogType.feeding),
-                        color: AppColors.feederActive,
-                      ),
-                      const SizedBox(width: 8),
-                      _FilterChip(
-                        label: 'Climate',
-                        isSelected: _filterType == LogType.climate,
-                        onTap: () => setState(
-                            () => _filterType = LogType.climate),
-                        color: AppColors.heatingActive,
-                      ),
-                      const SizedBox(width: 8),
-                      _FilterChip(
-                        label: 'Water',
-                        isSelected: _filterType == LogType.water,
-                        onTap: () => setState(
-                            () => _filterType = LogType.water),
-                        color: AppColors.waterActive,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SliverToBoxAdapter(child: SizedBox(height: 16)),
-
-              // ── Empty state ──────────────────────────────
-              if (logs.isEmpty)
-                SliverFillRemaining(
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.notifications_off_outlined,
-                            size: 56,
-                            color: AppColors.textTertiary),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'No alerts yet',
-                          style: TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'System activity will appear here.',
-                          style: TextStyle(
-                              color: AppColors.textTertiary,
-                              fontSize: 13),
                         ),
                       ],
                     ),
                   ),
                 ),
 
-              // ── Today group ──────────────────────────────
-              if (today.isNotEmpty) ...[
-                _SectionHeader(label: 'TODAY'),
-                SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) =>
-                        _LogTile(log: today[index]),
-                    childCount: today.length,
+                // ── Filter chips ───────────────────────────────
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: 35,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 12),
+                      children: [
+                        _FilterChip(
+                          label: 'All',
+                          isSelected: _filterType == null,
+                          onTap: () =>
+                              setState(() => _filterType = null),
+                          color: Colors.black,
+                        ),
+                        const SizedBox(width: 4),
+                        _FilterChip(
+                          label: 'Alerts',
+                          isSelected: _filterType == LogType.alert,
+                          onTap: () => setState(
+                              () => _filterType = LogType.alert),
+                          color: AppColors.error,
+                        ),
+                        const SizedBox(width: 4),
+                        _FilterChip(
+                          label: 'Feeding',
+                          isSelected: _filterType == LogType.feeding,
+                          onTap: () => setState(
+                              () => _filterType = LogType.feeding),
+                          color: AppColors.feederActive,
+                        ),
+                        const SizedBox(width: 4),
+                        _FilterChip(
+                          label: 'Climate',
+                          isSelected: _filterType == LogType.climate,
+                          onTap: () => setState(
+                              () => _filterType = LogType.climate),
+                          color: AppColors.heatingActive,
+                        ),
+                        const SizedBox(width: 4),
+                        _FilterChip(
+                          label: 'Water',
+                          isSelected: _filterType == LogType.water,
+                          onTap: () => setState(
+                              () => _filterType = LogType.water),
+                          color: AppColors.waterActive,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ],
 
-              // ── Yesterday group ──────────────────────────
-              if (yesterday.isNotEmpty) ...[
-                _SectionHeader(label: 'YESTERDAY'),
-                SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) =>
-                        _LogTile(log: yesterday[index]),
-                    childCount: yesterday.length,
+                const SliverToBoxAdapter(child: SizedBox(height: 12)),
+
+                // ── Empty state ────────────────────────────────
+                if (logs.isEmpty)
+                  SliverFillRemaining(
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.notifications_off_outlined,
+                              size: 56,
+                              color: AppColors.textTertiary),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'No alerts yet',
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'System activity will appear here.',
+                            style: TextStyle(
+                                color: AppColors.textTertiary,
+                                fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-              ],
 
-              // ── Older group ──────────────────────────────
-              if (older.isNotEmpty) ...[
-                _SectionHeader(label: 'OLDER'),
-                SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) =>
-                        _LogTile(log: older[index]),
-                    childCount: older.length,
+                // ── Today ──────────────────────────────────────
+                if (today.isNotEmpty) ...[
+                  _SectionHeader(label: 'TODAY'),
+                  SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) =>
+                          _LogTile(log: today[index]),
+                      childCount: today.length,
+                    ),
                   ),
-                ),
-              ],
+                ],
 
-              const SliverToBoxAdapter(child: SizedBox(height: 32)),
-            ],
-          );
-        },
+                // ── Yesterday ──────────────────────────────────
+                if (yesterday.isNotEmpty) ...[
+                  _SectionHeader(label: 'YESTERDAY'),
+                  SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) =>
+                          _LogTile(log: yesterday[index]),
+                      childCount: yesterday.length,
+                    ),
+                  ),
+                ],
+
+                // ── Older ──────────────────────────────────────
+                if (older.isNotEmpty) ...[
+                  _SectionHeader(label: 'OLDER'),
+                  SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) =>
+                          _LogTile(log: older[index]),
+                      childCount: older.length,
+                    ),
+                  ),
+                ],
+
+                const SliverToBoxAdapter(
+                    child: SizedBox(height: 32)),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
 }
 
-// ── Section header ────────────────────────────────────────────
+// ── Section header ─────────────────────────────────────────────
 class _SectionHeader extends StatelessWidget {
   final String label;
   const _SectionHeader({required this.label});
@@ -276,7 +273,7 @@ class _SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return SliverToBoxAdapter(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 6),
         child: Text(
           label,
           style: const TextStyle(
@@ -291,7 +288,7 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-// ── Individual log tile ───────────────────────────────────────
+// ── Log tile ───────────────────────────────────────────────────
 class _LogTile extends StatelessWidget {
   final ActivityLog log;
   const _LogTile({required this.log});
@@ -329,28 +326,28 @@ class _LogTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: log.type == LogType.alert
-            ? AppColors.error.withOpacity(0.08)
-            : AppColors.surfaceElevated,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: log.type == LogType.alert
-              ? AppColors.error.withOpacity(0.2)
-              : AppColors.border,
-        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Icon
+          // Icon bubble
           Container(
-            width: 40,
-            height: 40,
+            width: 42,
+            height: 42,
             decoration: BoxDecoration(
-              color: _color.withOpacity(0.15),
+              color: _color.withOpacity(0.12),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(_icon, color: _color, size: 20),
@@ -368,12 +365,10 @@ class _LogTile extends StatelessWidget {
                     Expanded(
                       child: Text(
                         log.title,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: log.type == LogType.alert
-                              ? AppColors.error
-                              : Colors.white,
+                          color: Colors.black,
                         ),
                       ),
                     ),
@@ -397,7 +392,7 @@ class _LogTile extends StatelessWidget {
                     height: 1.4,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 5),
                 Text(
                   log.timeLabel,
                   style: const TextStyle(
@@ -414,7 +409,7 @@ class _LogTile extends StatelessWidget {
   }
 }
 
-// ── Filter chip ───────────────────────────────────────────────
+// ── Filter chip ────────────────────────────────────────────────
 class _FilterChip extends StatelessWidget {
   final String label;
   final bool isSelected;
@@ -435,21 +430,29 @@ class _FilterChip extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
         decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.15) : AppColors.surface,
+          color: isSelected ? color : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color:
-                isSelected ? color.withOpacity(0.4) : AppColors.border,
+            color: isSelected ? color : AppColors.border,
           ),
+          boxShadow: isSelected
+              ? []
+              : [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
         ),
         child: Text(
           label,
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w600,
-            color: isSelected ? color : AppColors.textTertiary,
+            color: isSelected ? Colors.white : AppColors.textSecondary,
           ),
         ),
       ),

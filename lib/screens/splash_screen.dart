@@ -109,11 +109,10 @@ class _SplashScreenState extends State<SplashScreen>
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF0D1B2A),
-              Color.fromARGB(255, 43, 82, 123),
-              Color.fromARGB(255, 157, 162, 168),
+              Color(0xFFD7DF65),
+              Color(0xFFD2B335),
             ],
-            stops: [0.0, 0.5, 1.0],
+            stops: [0.0, 1.0],
           ),
         ),
         child: SafeArea(
@@ -130,8 +129,8 @@ class _SplashScreenState extends State<SplashScreen>
 
                       // Logo image
                       Container(
-                        width: 180,
-                        height: 180,
+                        width: 230,
+                        height: 230,
                         decoration: const BoxDecoration(
                           shape: BoxShape.circle,
                           color: Colors.transparent,
@@ -164,7 +163,8 @@ class _SplashScreenState extends State<SplashScreen>
                       Text(
                         AppConstants.appName,
                         style: const TextStyle(
-                          fontSize: 40,
+                          fontFamily: 'Kavoon',
+                          fontSize: 47,
                           fontWeight: FontWeight.w800,
                           color: Colors.white,
                           letterSpacing: 0.5,
@@ -177,9 +177,9 @@ class _SplashScreenState extends State<SplashScreen>
                       Text(
                         'Smart Poultry Management',
                         style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w400,
-                          color: Colors.white.withOpacity(1.0),
+                          fontSize: 17,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white.withOpacity(0.90),
                           letterSpacing: 0.3,
                         ),
                       ),
@@ -225,9 +225,9 @@ class _SplashScreenState extends State<SplashScreen>
                                     child: const Text(
                                       'Get Started',
                                       style: TextStyle(
-                                        fontSize: 17,
+                                        fontSize: 19,
                                         fontWeight: FontWeight.w700,
-                                        color: Color(0xFF0D1B2A),
+                                        color: Color.fromARGB(255, 0, 0, 0),
                                       ),
                                     ),
                                   ),
