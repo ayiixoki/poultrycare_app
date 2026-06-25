@@ -28,22 +28,15 @@ import 'utils/app_theme.dart';
 import 'screens/splash_screen.dart';
 
 Future<void> main() async {
-  // ── 1. Ensure Flutter engine is initialized before calling platform code ──
-  // Required when calling platform channels (like Firebase) before runApp().
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ── 2. Lock the app to portrait mode ──────────────────────────────────────
-  // A farm monitoring app doesn't need landscape mode.
-  try {
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-} catch (e) {
-  // Ignore duplicate app error on hot restart
-}
+  // Initialize Firebase only once
+  if (Firebase.apps.isEmpty) {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  }
 
-  // ── 3. Style the system status bar ────────────────────────────────────────
-  // Makes the status bar transparent so the app content shows through.
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -51,16 +44,6 @@ Future<void> main() async {
     ),
   );
 
-  // ── 4. Initialize Firebase ────────────────────────────────────────────────
-  // This MUST be called before any Firebase service is used.
-  // It reads your google-services.json / GoogleService-Info.plist.
-  if (Firebase.apps.isEmpty) {
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-}
-
-  // ── 5. Launch the app ─────────────────────────────────────────────────────
   runApp(const PoultryCareApp());
 }
 

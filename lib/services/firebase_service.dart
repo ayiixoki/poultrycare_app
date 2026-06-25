@@ -29,7 +29,7 @@ class FirebaseService {
   // ── Firebase database reference (root) ───────────────────────────────────
   final FirebaseDatabase _db = FirebaseDatabase.instanceFor(
   app: Firebase.app(),
-  databaseURL: 'https://poultrycare-app-default-rtdb.asia-southeast1.firebasedatabase.app',
+  databaseURL: 'https://poultrycare-f816d-default-rtdb.asia-southeast1.firebasedatabase.app/',
 );
 
   // ── Convenience getters for frequently-used references ───────────────────
@@ -37,6 +37,8 @@ class FirebaseService {
   DatabaseReference get _schedulesRef => _db.ref(AppConstants.dbSchedules);
   DatabaseReference get _logsRef => _db.ref(AppConstants.dbLogs);
   DatabaseReference get _settingsRef => _db.ref(AppConstants.dbSettings);
+  DatabaseReference get _thresholdsRef => _db.ref('thresholds');
+  DatabaseReference get _notifRef => _db.ref('notifications_enabled');
 
   // ==========================================================================
   // SENSOR DATA — Real-time stream
@@ -167,6 +169,25 @@ class FirebaseService {
     await _schedulesRef.child(id).update({'enabled': enabled});
   }
 
+  Future<Map<String, dynamic>> getThresholds() async {
+  final snap = await _thresholdsRef.get();
+  if (!snap.exists) return {};
+  return Map<String, dynamic>.from(snap.value as Map);
+}
+
+Future<void> saveThreshold(String key, double value) async {
+  await _thresholdsRef.update({key: value});
+}
+
+Future<bool> getNotificationsEnabled() async {
+  final snap = await _notifRef.get();
+  return snap.exists ? (snap.value as bool) : true;
+}
+
+Future<void> setNotificationsEnabled(bool value) async {
+  await _notifRef.set(value);
+}
+
   // ==========================================================================
   // ACTIVITY LOGS — write only (read is a stream)
   // ==========================================================================
@@ -194,6 +215,21 @@ class FirebaseService {
       // Sort newest first.
       logs.sort((a, b) => b.timestamp.compareTo(a.timestamp));
       return logs;
+    });
+  }
+
+  Stream<Map<String, dynamic>> thresholdsStream() {
+    return _db.ref('thresholds').onValue.map((event) {
+      if (!event.snapshot.exists) {
+        return {
+          'tempMax': AppConstants.defaultMaxTemp,
+          'tempMin': AppConstants.defaultMinTemp,
+          'feedLow': 30.0,
+          'waterLow': 30.0,
+          'humMax': 70.0,
+        };
+      }
+      return Map<String, dynamic>.from(event.snapshot.value as Map);
     });
   }
 
@@ -237,3 +273,4 @@ class FirebaseService {
     await _settingsRef.update(settings);
   }
 }
+

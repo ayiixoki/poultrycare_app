@@ -1,13 +1,8 @@
 // ============================================================
 // lib/screens/settings_screen.dart
 // ============================================================
-
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
 import '../services/firebase_service.dart';
-import '../utils/app_colors.dart';
-import '../utils/constants.dart';
-import 'login_screen.dart';
+import 'package:flutter/material.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -17,13 +12,34 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _isLoading = true;
-  bool _isSaving = false;
+  static const Color _bg = Color(0xFFEAE7DF);
+  static const Color _card = Color(0xFFF7F5F0);
+  static const Color _green = Color(0xFF3FCB6E);
+  static const Color _subtitleGray = Color(0xFF8A8A8A);
 
-  double _minTemp = AppConstants.defaultMinTemp;
-  double _maxTemp = AppConstants.defaultMaxTemp;
-  bool _autoClimate = true;
-  bool _autoFeeding = true;
+  // Existing 'thresholds' node in Realtime Database — keys already in
+  // use by the rest of the app: tempMax, tempMin, humMax, humMin, feedLow.
+  // We read/write to this node directly instead of creating a new
+  // 'settings' node, so this screen stays the single source of truth
+  // for the same data everything else already relies on.
+
+
+  bool _isLoading = true;
+
+  // Temperature
+  double _tempLimit = 32.0;
+
+  // Humidity
+  double _humidityLimit = 70.0;
+
+  // Feed level (relevant addition — see note below build method)
+  double _feedAlertPercent = 30.0;
+
+  // Water level
+  double _waterAlertPercent = 30.0;
+
+  // Notifications
+  bool _notificationsEnabled = true;
 
   @override
   void initState() {
@@ -31,403 +47,324 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadSettings();
   }
 
-  Future<void> _loadSettings() async {
-    try {
-      final data = await FirebaseService().getSettings();
-      setState(() {
-        _minTemp = (data['min_temp'] as num?)?.toDouble()
-            ?? AppConstants.defaultMinTemp;
-        _maxTemp = (data['max_temp'] as num?)?.toDouble()
-            ?? AppConstants.defaultMaxTemp;
-        _autoClimate = data['auto_climate'] as bool? ?? true;
-        _autoFeeding = data['auto_feeding'] as bool? ?? true;
-        _isLoading = false;
-      });
-    } catch (_) {
-      setState(() => _isLoading = false);
-    }
+Future<void> _loadSettings() async {
+  try {
+    final data = await FirebaseService().getThresholds();
+    final notifEnabled = await FirebaseService().getNotificationsEnabled();
+
+    setState(() {
+      _tempLimit = (data['tempMax'] as num?)?.toDouble() ?? _tempLimit;
+      _humidityLimit = (data['humMax'] as num?)?.toDouble() ?? _humidityLimit;
+      _feedAlertPercent = (data['feedLow'] as num?)?.toDouble() ?? _feedAlertPercent;
+      _waterAlertPercent = (data['waterLow'] as num?)?.toDouble() ?? _waterAlertPercent;
+      _notificationsEnabled = notifEnabled;
+      _isLoading = false;
+    });
+  } catch (_) {
+    setState(() => _isLoading = false);
   }
+}
 
-  Future<void> _saveSettings() async {
-    setState(() => _isSaving = true);
-    try {
-      await FirebaseService().saveSettings({
-        'min_temp': _minTemp,
-        'max_temp': _maxTemp,
-        'auto_climate': _autoClimate,
-        'auto_feeding': _autoFeeding,
-      });
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Settings saved!'),
-          backgroundColor: AppColors.success,
-        ),
-      );
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to save settings.')),
-      );
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
-    }
-  }
-
-  Future<void> _signOut() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Sign Out'),
-        content: const Text('Are you sure you want to sign out?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.error,
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Sign Out',
-                style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    await FirebaseAuth.instance.signOut();
+Future<void> _saveThreshold(String key, double value) async {
+  try {
+    await FirebaseService().saveThreshold(key, value);
+  } catch (_) {
     if (!mounted) return;
-
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (route) => false,
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Failed to save setting.')),
     );
   }
+}
+
+Future<void> _saveNotifications(bool value) async {
+  try {
+    await FirebaseService().setNotificationsEnabled(value);
+  } catch (_) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Failed to save setting.')),
+    );
+  }
+}
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F0E8),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFFF5F0E8),
-        elevation: 0,
-        title: const Text(
-          'Settings',
-          style: TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.w800,
-            fontSize: 20,
-          ),
-        ),
-        iconTheme: const IconThemeData(color: Colors.black),
-        actions: [
-          if (!_isLoading)
-            TextButton(
-              onPressed: _isSaving ? null : _saveSettings,
-              child: _isSaving
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text(
-                      'Save',
-                      style: TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16,
-                      ),
-                    ),
-            ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.only(top: 8, bottom: 32),
-              children: [
-                // ── Temperature ──────────────────────────────────────
-                const _SectionHeader('TEMPERATURE THRESHOLDS'),
-                _SettingsCard(
-                  children: [
-                    _SliderRow(
-                      label: 'Min Temperature',
-                      value: _minTemp,
-                      unit: '°C',
-                      min: 20.0,
-                      max: 35.0,
-                      onChanged: (v) {
-                        setState(() {
-                          _minTemp = v;
-                          if (_minTemp >= _maxTemp) _maxTemp = _minTemp + 1;
-                        });
-                      },
-                      description:
-                          'Heating lamp activates when temp falls below this.',
-                      activeColor: AppColors.info,
-                    ),
-                    const Divider(height: 1, indent: 16, endIndent: 16),
-                    _SliderRow(
-                      label: 'Max Temperature',
-                      value: _maxTemp,
-                      unit: '°C',
-                      min: 25.0,
-                      max: 45.0,
-                      onChanged: (v) {
-                        setState(() {
-                          _maxTemp = v;
-                          if (_maxTemp <= _minTemp) _minTemp = _maxTemp - 1;
-                        });
-                      },
-                      description:
-                          'Cooling fan activates when temp exceeds this.',
-                      activeColor: AppColors.error,
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 10),
-
-                // ── Automation ───────────────────────────────────────
-                const _SectionHeader('AUTOMATION'),
-                _SettingsCard(
-                  children: [
-                    _ToggleRow(
-                      icon: Icons.thermostat,
-                      iconColor: AppColors.heatingActive,
-                      title: 'Auto Climate Control',
-                      subtitle:
-                          'Arduino automatically manages heating lamp and cooling fan based on temperature thresholds.',
-                      value: _autoClimate,
-                      onChanged: (v) => setState(() => _autoClimate = v),
-                    ),
-                    const Divider(height: 1, indent: 16, endIndent: 16),
-                    _ToggleRow(
-                      icon: Icons.grain,
-                      iconColor: AppColors.feederActive,
-                      title: 'Auto Feeding',
-                      subtitle:
-                          'Arduino automatically dispenses feed at scheduled times.',
-                      value: _autoFeeding,
-                      onChanged: (v) => setState(() => _autoFeeding = v),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 10),
-
-                // ── Account ──────────────────────────────────────────
-                const _SectionHeader('ACCOUNT'),
-                _SettingsCard(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: const BoxDecoration(
-                              color: AppColors.primaryLight,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(Icons.person_outline,
-                                color: AppColors.primary),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Signed in as',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.black.withOpacity(0.5),
-                                  ),
-                                ),
-                                Text(
-                                  FirebaseAuth.instance.currentUser?.email ??
-                                      'Unknown',
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.black,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 16),
-
-                // ── Sign out ─────────────────────────────────────────
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: OutlinedButton.icon(
-                    onPressed: _signOut,
-                    icon: const Icon(Icons.logout, color: AppColors.error),
-                    label: const Text('Sign Out',
-                        style: TextStyle(color: AppColors.error)),
-                    style: OutlinedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      side: BorderSide(
-                          color: AppColors.error.withOpacity(0.4)),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                // ── Version ──────────────────────────────────────────
-                Center(
-                  child: Text(
-                    'PoultryCare v${AppConstants.appVersion} — Pampanga State University',
+      backgroundColor: _bg,
+      body: SafeArea(
+        bottom: false,
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator(color: Colors.black54))
+            : ListView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+                children: [
+                  // ── Header ──────────────────────────────────
+                  const Text(
+                    'Settings',
                     style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.black.withOpacity(0.35),
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.black,
                     ),
-                    textAlign: TextAlign.center,
                   ),
-                ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Adjust farm preferences',
+                    style: TextStyle(fontSize: 14, color: _subtitleGray),
+                  ),
+                  const SizedBox(height: 20),
 
-                const SizedBox(height: 24),
-              ],
-            ),
-    );
-  }
-}
+                  // ── Temperature Limit ──────────────────────
+                  _SliderCard(
+                    cardColor: _card,
+                    icon: Icons.thermostat_rounded,
+                    iconBg: const Color(0xFFFBDADA),
+                    iconColor: const Color(0xFFE2574C),
+                    title: 'Temperature Limit',
+                    subtitle: 'Alert when Too Hot',
+                    value: _tempLimit,
+                    unit: '°C',
+                    min: 20,
+                    max: 45,
+                    activeColor: _green,
+                    onChanged: (v) => setState(() => _tempLimit = v),
+                    onChangeEnd: (v) => _saveThreshold('tempMax', v),
+                  ),
+                  const SizedBox(height: 12),
 
-// ── Section header ─────────────────────────────────────────────────────────────
-class _SectionHeader extends StatelessWidget {
-  final String text;
-  const _SectionHeader(this.text);
+                  // ── Humidity Limit ──────────────────────────
+                  _SliderCard(
+                    cardColor: _card,
+                    icon: Icons.cloud_outlined,
+                    iconBg: const Color(0xFFD8EAFB),
+                    iconColor: const Color(0xFF3B8FE0),
+                    title: 'Humidity Limit',
+                    subtitle: 'Alert when high humid',
+                    value: _humidityLimit,
+                    unit: '%',
+                    min: 0,
+                    max: 100,
+                    activeColor: _green,
+                    onChanged: (v) => setState(() => _humidityLimit = v),
+                    onChangeEnd: (v) => _saveThreshold('humMax', v),
+                  ),
+                  const SizedBox(height: 12),
 
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: AppColors.textTertiary,
-          letterSpacing: 0.8,
-        ),
+                  // ── Feed Level Alert (relevant addition) ─────
+                  // Reads/writes the existing thresholds/feedLow value
+                  // already used elsewhere in the app, instead of a
+                  // separate settings field.
+                  _SliderCard(
+                    cardColor: _card,
+                    icon: Icons.grain_rounded,
+                    iconBg: const Color(0xFFFBE7CE),
+                    iconColor: const Color(0xFFD68A2A),
+                    title: 'Feed Level Alert',
+                    subtitle: 'Alert when feed is low',
+                    value: _feedAlertPercent,
+                    unit: '%',
+                    min: 5,
+                    max: 60,
+                    activeColor: _green,
+                    onChanged: (v) =>
+                        setState(() => _feedAlertPercent = v),
+                    onChangeEnd: (v) => _saveThreshold('feedLow', v),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // ── Water Limit ───────────────────────────────
+                  _SliderCard(
+                    cardColor: _card,
+                    icon: Icons.water_drop_rounded,
+                    iconBg: const Color(0xFFD6EEF7),
+                    iconColor: const Color(0xFF1FA3C9),
+                    title: 'Water Limit',
+                    subtitle: 'Alert when Low',
+                    value: _waterAlertPercent,
+                    unit: '%',
+                    min: 5,
+                    max: 60,
+                    activeColor: _green,
+                    onChanged: (v) =>
+                        setState(() => _waterAlertPercent = v),
+                    onChangeEnd: (v) => _saveThreshold('waterLow', v),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // ── Notifications ─────────────────────────────
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: _card,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 42,
+                          height: 42,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFE3E2D6),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.notifications_none_rounded,
+                              color: Color(0xFF6B6B5E), size: 22),
+                        ),
+                        const SizedBox(width: 14),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Notifications',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.black,
+                                ),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Enable Alerts on Phone',
+                                style: TextStyle(
+                                    fontSize: 13, color: _subtitleGray),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Switch(
+                          value: _notificationsEnabled,
+                          activeColor: Colors.white,
+                          activeTrackColor: _green,
+                          onChanged: (v) {
+                            setState(() => _notificationsEnabled = v);
+                            _saveNotifications(v);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 28),
+
+                  const Center(
+                    child: Text(
+                      'PoultryCare — Pampanga State University',
+                      style: TextStyle(fontSize: 11, color: _subtitleGray),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ],
+              ),
       ),
     );
   }
 }
 
-// ── Settings card ──────────────────────────────────────────────────────────────
-class _SettingsCard extends StatelessWidget {
-  final List<Widget> children;
-  const _SettingsCard({required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(children: children),
-    );
-  }
-}
-
-// ── Slider row ─────────────────────────────────────────────────────────────────
-class _SliderRow extends StatelessWidget {
-  final String label;
+// ── Slider card (matches photo style exactly) ───────────────────
+class _SliderCard extends StatelessWidget {
+  final Color cardColor;
+  final IconData icon;
+  final Color iconBg;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
   final double value;
   final String unit;
   final double min;
   final double max;
-  final ValueChanged<double> onChanged;
-  final String description;
   final Color activeColor;
+  final ValueChanged<double> onChanged;
+  final ValueChanged<double> onChangeEnd;
 
-  const _SliderRow({
-    required this.label,
+  const _SliderCard({
+    required this.cardColor,
+    required this.icon,
+    required this.iconBg,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
     required this.value,
     required this.unit,
     required this.min,
     required this.max,
-    required this.onChanged,
-    required this.description,
     required this.activeColor,
+    required this.onChanged,
+    required this.onChangeEnd,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(18),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: iconBg,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: iconColor, size: 22),
+              ),
+              const SizedBox(width: 14),
               Expanded(
-                child: Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.black,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                          fontSize: 13, color: Color(0xFF8A8A8A)),
+                    ),
+                  ],
                 ),
               ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: activeColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '${value.toStringAsFixed(0)}$unit',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: activeColor,
-                    fontSize: 14,
-                  ),
+              Text(
+                '${value.toStringAsFixed(0)}$unit',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.black,
                 ),
               ),
             ],
           ),
-          Slider(
-            value: value,
-            min: min,
-            max: max,
-            divisions: ((max - min) * 2).toInt(),
-            activeColor: activeColor,
-            onChanged: onChanged,
-          ),
-          Text(
-            description,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.black.withOpacity(0.5),
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 5,
+              activeTrackColor: activeColor,
+              inactiveTrackColor: const Color(0xFFDDDAD2),
+              thumbColor: Colors.white,
+              thumbShape: const _RingThumbShape(ringColor: Color(0xFF3FCB6E)),
+              overlayShape: SliderComponentShape.noOverlay,
+            ),
+            child: Slider(
+              value: value.clamp(min, max),
+              min: min,
+              max: max,
+              onChanged: onChanged,
+              onChangeEnd: onChangeEnd,
             ),
           ),
         ],
@@ -436,66 +373,39 @@ class _SliderRow extends StatelessWidget {
   }
 }
 
-// ── Toggle row ─────────────────────────────────────────────────────────────────
-class _ToggleRow extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
-  final String title;
-  final String subtitle;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  const _ToggleRow({
-    required this.icon,
-    required this.iconColor,
-    required this.title,
-    required this.subtitle,
-    required this.value,
-    required this.onChanged,
-  });
+// ── Custom thumb: white circle with green ring, matches photo ──
+class _RingThumbShape extends SliderComponentShape {
+  final Color ringColor;
+  const _RingThumbShape({required this.ringColor});
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: iconColor.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: iconColor, size: 18),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.black,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.black.withOpacity(0.5),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Switch(value: value, onChanged: onChanged),
-        ],
-      ),
+  Size getPreferredSize(bool isEnabled, bool isDiscrete) =>
+      const Size(18, 18);
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset center, {
+    required Animation<double> activationAnimation,
+    required Animation<double> enableAnimation,
+    bool isDiscrete = false,
+    required TextPainter labelPainter,
+    required RenderBox parentBox,
+    required SliderThemeData sliderTheme,
+    required TextDirection textDirection,
+    required double value,
+    required double textScaleFactor,
+    required Size sizeWithOverflow,
+  }) {
+    final canvas = context.canvas;
+    canvas.drawCircle(center, 9, Paint()..color = Colors.white);
+    canvas.drawCircle(
+      center,
+      9,
+      Paint()
+        ..color = ringColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5,
     );
   }
 }

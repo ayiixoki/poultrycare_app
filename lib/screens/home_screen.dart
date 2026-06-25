@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import '../utils/app_colors.dart';
 import 'dashboard_screen.dart';
 import 'feeding_screen.dart';
-import 'climate_screen.dart';
+import 'alerts_screen.dart';
 import 'logs_screen.dart';
 import 'settings_screen.dart';
 
@@ -26,6 +26,7 @@ class _HomeScreenState extends State<HomeScreen> {
     FeedingScreen(),
     ClimateScreen(),
     LogsScreen(),
+    SettingsScreen(),
   ];
 
   // Returns user's display name or email prefix
@@ -39,31 +40,17 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   static const _navItems = [
-    _NavItem(icon: Icons.grid_view_rounded, label: 'Dashboard'),
-    _NavItem(icon: Icons.grain_rounded, label: 'Feeding'),
-    _NavItem(icon: Icons.thermostat_rounded, label: 'Climate'),
+    _NavItem(icon: Icons.home_rounded, label: 'Home'),
+    _NavItem(icon: Icons.schedule_rounded, label: 'Schedule'),
     _NavItem(icon: Icons.notifications_rounded, label: 'Alerts'),
+    _NavItem(icon: Icons.assignment_rounded, label: 'Logs'),
+    _NavItem(icon: Icons.settings_rounded, label: 'Settings'),
   ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: _currentIndex == 0 ? null : AppBar(
-        backgroundColor: AppColors.background,
-        title: Text(_navItems[_currentIndex].label),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined,
-                color: AppColors.textSecondary),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SettingsScreen()),
-            ),
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
       body: IndexedStack(
         index: _currentIndex,
         children: _screens,
@@ -71,15 +58,8 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: const Color.fromARGB(255, 233, 230, 224),
-          border: const Border(
-            top: BorderSide(color: Color.fromARGB(255, 0, 0, 0), width: 1),
-          ),
           boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.3),
-              blurRadius: 20,
-              offset: const Offset(0, -4),
-            ),
+            
           ],
         ),
         child: SafeArea(

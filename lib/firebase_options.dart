@@ -41,49 +41,49 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyCVETPGOXYtc43GfzUqtkWE8L8keDMY078',
-    appId: '1:428621787296:web:4fb7de5f70622cd90a99c5',
-    messagingSenderId: '428621787296',
-    projectId: 'poultrycare-app',
-    authDomain: 'poultrycare-app.firebaseapp.com',
-    storageBucket: 'poultrycare-app.firebasestorage.app',
-    measurementId: 'G-BZ0FBRYEC2',
+    apiKey: 'AIzaSyCr9BMq9NI8zsdPgMqEYoLFPWCJ_13CONg',
+    appId: '1:563666769332:web:e92345d7a994e9517ccee1',
+    messagingSenderId: '563666769332',
+    projectId: 'poultrycare-f816d',
+    authDomain: 'poultrycare-f816d.firebaseapp.com',
+    databaseURL: 'https://poultrycare-f816d-default-rtdb.asia-southeast1.firebasedatabase.app',
+    storageBucket: 'poultrycare-f816d.firebasestorage.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyDT3_AoBQdGbMoqUEOM6Tps80v06QwvfBs',
-    appId: '1:428621787296:android:df0781539f308a880a99c5',
-    messagingSenderId: '428621787296',
-    projectId: 'poultrycare-app',
-    databaseURL: 'https://poultrycare-app-default-rtdb.asia-southeast1.firebasedatabase.app',
-    storageBucket: 'poultrycare-app.firebasestorage.app',
+    apiKey: 'AIzaSyDwSMbEj4SUsXU_hE8DwIcAp6zgzWGaVD8',
+    appId: '1:563666769332:android:f4d99f2528e90e1b7ccee1',
+    messagingSenderId: '563666769332',
+    projectId: 'poultrycare-f816d',
+    databaseURL: 'https://poultrycare-f816d-default-rtdb.asia-southeast1.firebasedatabase.app',
+    storageBucket: 'poultrycare-f816d.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyDRNCTdRJRZZWBHrSWGuNNJYnwwbGpHwk0',
-    appId: '1:428621787296:ios:e926fa6818b1b4c50a99c5',
-    messagingSenderId: '428621787296',
-    projectId: 'poultrycare-app',
-    storageBucket: 'poultrycare-app.firebasestorage.app',
+    apiKey: 'AIzaSyBN3he8mr3joz62pwPk8KImzacua4iwNKA',
+    appId: '1:563666769332:ios:953730ee1547bdf27ccee1',
+    messagingSenderId: '563666769332',
+    projectId: 'poultrycare-f816d',
+    databaseURL: 'https://poultrycare-f816d-default-rtdb.asia-southeast1.firebasedatabase.app',
+    storageBucket: 'poultrycare-f816d.firebasestorage.app',
     iosBundleId: 'com.example.poultrycareApp',
   );
-
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyDRNCTdRJRZZWBHrSWGuNNJYnwwbGpHwk0',
-    appId: '1:428621787296:ios:e926fa6818b1b4c50a99c5',
-    messagingSenderId: '428621787296',
-    projectId: 'poultrycare-app',
-    storageBucket: 'poultrycare-app.firebasestorage.app',
+    apiKey: 'AIzaSyBN3he8mr3joz62pwPk8KImzacua4iwNKA',
+    appId: '1:563666769332:ios:953730ee1547bdf27ccee1',
+    messagingSenderId: '563666769332',
+    projectId: 'poultrycare-f816d',
+    databaseURL: 'https://poultrycare-f816d-default-rtdb.asia-southeast1.firebasedatabase.app',
+    storageBucket: 'poultrycare-f816d.firebasestorage.app',
     iosBundleId: 'com.example.poultrycareApp',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyCVETPGOXYtc43GfzUqtkWE8L8keDMY078',
-    appId: '1:428621787296:web:3645e76b63c313cf0a99c5',
-    messagingSenderId: '428621787296',
-    projectId: 'poultrycare-app',
-    authDomain: 'poultrycare-app.firebaseapp.com',
-    storageBucket: 'poultrycare-app.firebasestorage.app',
-    measurementId: 'G-D1NT0H69RY',
+    apiKey: 'AIzaSyCr9BMq9NI8zsdPgMqEYoLFPWCJ_13CONg',
+    appId: '1:563666769332:web:16606a4eb5778bf77ccee1',
+    messagingSenderId: '563666769332',
+    projectId: 'poultrycare-f816d',
+    authDomain: 'poultrycare-f816d.firebaseapp.com',
+    databaseURL: 'https://poultrycare-f816d-default-rtdb.asia-southeast1.firebasedatabase.app',
+    storageBucket: 'poultrycare-f816d.firebasestorage.app',
   );
 }

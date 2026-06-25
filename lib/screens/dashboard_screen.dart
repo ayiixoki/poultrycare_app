@@ -1,9 +1,9 @@
 // ============================================================
-// lib/screens/dashboard_screen.dart  — REDESIGNED (Dark Theme)
+// lib/screens/dashboard_screen.dart  — REDESIGNED (Reference UI)
 // ============================================================
 // Features: greeting with user name, critical alert banner,
-// sensor cards (temp, humidity, last fed, water level),
-// feed level bar, device states, quick dispense button.
+// 2x2 sensor cards grid (feed, water, temp, humidity),
+// environmental control status, device states.
 // ============================================================
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -55,18 +55,10 @@ class DashboardScreen extends StatelessWidget {
           alertMessage = 'Feed Running Low! Refill needed soon.';
         }
 
-            return Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Color(0xFFF5F0E8),
-                    Color(0xFFF5F0E8),
-                  ],
-                  stops: [0.0, 2.0],
-                ),
-              ),
+        return Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFFF5F5F5),
+          ),
           child: isLoading
               ? const Center(
                   child: CircularProgressIndicator(color: Color.fromARGB(255, 215, 196, 47)))
@@ -74,7 +66,7 @@ class DashboardScreen extends StatelessWidget {
                   slivers: [
                     // ── Custom header ──────────────────────────
                     SliverToBoxAdapter(
-                      child: _buildHeader(context),
+                      child: _buildHeader(context, data),
                     ),
 
                     // ── Critical alert banner ──────────────────
@@ -83,162 +75,148 @@ class DashboardScreen extends StatelessWidget {
                         child: _AlertBanner(message: alertMessage),
                       ),
 
-                    // ── Sensor cards 2x2 grid ──────────────────
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                      sliver: SliverGrid(
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                          childAspectRatio: 1.1,
-                        ),
-                        delegate: SliverChildListDelegate([
-                          _SensorCard(
-                            icon: Icons.thermostat_rounded,
-                            label: 'Temperature',
-                            value: '${data.temperature.toStringAsFixed(0)}°C',
-                            statusLabel: _tempStatus(data.temperature),
-                            statusColor: _tempColor(data.temperature),
-                            iconColor: Color(0xFFE9CD31),
-                          ),
-                          _SensorCard(
-                            icon: Icons.water_drop_rounded,
-                            label: 'Humidity',
-                            value: '${data.humidity.toStringAsFixed(0)}%',
-                            statusLabel: _humStatus(data.humidity),
-                            statusColor: _humColor(data.humidity),
-                            iconColor: Color(0xFFE9CD31), 
-                          ),
-                          _SensorCard(
-                            icon: Icons.schedule_rounded,
-                            label: 'Last Fed',
-                            value: _lastFed(data.lastFeedTime),
-                            statusLabel: 'Most recent feed',
-                            statusColor: AppColors.feederActive,
-                            iconColor: Color(0xFFE9CD31),
-                          ),
-                          _SensorCard(
-                            icon: Icons.water_rounded,
-                            label: 'Water Level',
-                            value: data.waterLevel,
-                            statusLabel: data.waterLevel == 'FULL'
-                                ? 'Water OK'
-                                : 'Check Tank',
-                            statusColor: data.waterLevel == 'FULL'
-                                ? AppColors.success
-                                : AppColors.error,
-                            iconColor: Color(0xFFE9CD31),
-                          ),
-                        ]),
-                      ),
-                    ),
-
-                    // ── Feed level bar ─────────────────────────
+                    // ── 2x2 Sensor cards grid ──────────────────
                     SliverToBoxAdapter(
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                        child: FeedLevelBar(
-                          feedLevel: data.feedLevel,
-                          feedMax: data.feedMax,
-                        ),
-                      ),
-                    ),
-
-                    // ── Device states ──────────────────────────
-                    SliverToBoxAdapter(
-                      child: _DeviceStatesRow(data: data),
-                    ),
-
-                    // ── Quick dispense ─────────────────────────
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-                        child: ElevatedButton.icon(
-                          onPressed: data.feederActive
-                              ? null
-                              : () => _quickDispense(context),
-                              style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFFFC933),
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          children: [
+                            // Row 1: Feed Level & Water Level
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _FeedLevelCard(data: data, context: context),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: _WaterLevelCard(data: data, context: context),
+                                ),
+                              ],
                             ),
-                          icon: const Icon(Icons.grain_rounded),
-                          label: Text(
-                              data.feederActive
-                                  ? 'Dispensing...'
-                                  : 'Dispense Feed',
-                              style: const TextStyle(color: Color(0xFF000000)),
-                            ),                        
-                          ),
+                            const SizedBox(height: 12),
+                            // Row 2: Temperature & Humidity
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _TempHumCard(
+                                    title: 'Temperature',
+                                    value: '${data.temperature.toStringAsFixed(0)}°C',
+                                    icon: Icons.thermostat,
+                                    iconColor: Colors.orange,
+                                    status: _tempStatus(data.temperature),
+                                    statusColor: _tempColor(data.temperature),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: _TempHumCard(
+                                    title: 'Humidity',
+                                    value: '${data.humidity.toStringAsFixed(0)}%',
+                                    icon: Icons.cloud,
+                                    iconColor: Colors.blue,
+                                    status: _humStatus(data.humidity),
+                                    statusColor: _humColor(data.humidity),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
+                    ),
+
+                    // ── Environmental Control Status ────────────
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(15, 0, 14, 12),
+                        child: _EnvironmentalControlStatus(data: data),
+                      ),
+                    ),
+
+                    // ── Spacing ────────────────────────────────
+                    SliverToBoxAdapter(
+                      child: SizedBox(height: 80),
+                    ),
                   ],
                 ),
         );
       },
     );
+    
   }
 
-  Widget _buildHeader(BuildContext context) {
-  return Padding(
-    padding: const EdgeInsets.fromLTRB(20, 52, 20, 16),
-    child: Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildHeader(BuildContext context, SensorData data) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(24, 60, 24, 32),
+      decoration: const BoxDecoration(
+        color: Color(0xFFD4C84E),
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(42),
+          bottomRight: Radius.circular(42),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            DateFormat('EEEE, MMMM d').format(DateTime.now()),
+            style: const TextStyle(
+              fontSize: 14,
+              color: Color(0xFF666666),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          const Text(
+            'Good Morning,\nFarmer!',
+            style: TextStyle(
+              fontSize: 30,
+              height: 1.1,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          Row(
             children: [
-              Text(
-                'Hello,',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  height: 1.5,
-                  color: Colors.black.withOpacity(1.0),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
                 ),
-              ),
-              const SizedBox(height: 1),
-              Text(
-                _userName,
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
-                )
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.9),
+                  borderRadius: BorderRadius.circular(30),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.wifi_rounded,
+                      size: 16,
+                      color: data.systemOnline ? Colors.green : Colors.red,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      data.systemOnline ? 'Online' : 'Offline',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
-        ),
-        // Profile avatar + settings
-        GestureDetector(
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const SettingsScreen()),
-          ),
-          child: Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFC933),
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Text(
-                _userName.isNotEmpty
-                    ? _userName[0].toUpperCase()
-                    : 'F',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  fontSize: 18,
-                  color: AppColors.textOnPrimary,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
+        ],
+      ),
+    );
+  }
 
   void _quickDispense(BuildContext context) async {
     try {
@@ -260,25 +238,26 @@ class DashboardScreen extends StatelessWidget {
   }
 
   Color _tempColor(double t) {
-    if (t > AppConstants.defaultMaxTemp) return AppColors.error;
+    if (t > AppConstants.defaultMaxTemp) return const Color(0xFFFF6B6B);
     if (t < AppConstants.defaultMinTemp) return AppColors.info;
     return AppColors.warning;
   }
 
   String _tempStatus(double t) {
-    if (t > AppConstants.defaultMaxTemp) return 'Too Hot!';
+    if (t > AppConstants.defaultMaxTemp) return 'Too Hot';
     if (t < AppConstants.defaultMinTemp) return 'Too Cold';
     return 'Normal';
   }
 
   String _humStatus(double h) {
-    if (h > 80) return 'Too Humid';
-    if (h < 40) return 'Too Dry';
+    if (h > 80) return 'High';
+    if (h < 40) return 'Low';
     return 'Good';
   }
 
   Color _humColor(double h) {
-    if (h > 80 || h < 40) return AppColors.warning;
+    if (h > 80) return const Color(0xFFFF6B6B);
+    if (h < 40) return const Color(0xFFFFA500);
     return AppColors.success;
   }
 
@@ -297,32 +276,31 @@ class _AlertBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.alertCritical,
-        borderRadius: BorderRadius.circular(16),
+        color: const Color(0xFFFFEAEA),
+        border: Border.all(
+          color: const Color(0xFFFF6B6B),
+          width: 1.5,
+        ),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(Icons.warning_rounded,
-                color: Colors.white, size: 18),
+          const Icon(
+            Icons.warning_amber_rounded,
+            color: Color(0xFFFF6B6B),
+            size: 24,
           ),
-          const SizedBox(width: 12),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               message,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(  // ← CHANGE
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
+              style: const TextStyle(
+                color: Color(0xFF333333),
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -332,22 +310,291 @@ class _AlertBanner extends StatelessWidget {
   }
 }
 
-// ── Individual sensor card ────────────────────────────────────
-class _SensorCard extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final String statusLabel;
-  final Color statusColor;
-  final Color iconColor;
+// ── Feed Level Card ────────────────────────────────────────────
+class _FeedLevelCard extends StatelessWidget {
+  final SensorData data;
+  final BuildContext context;
 
-  const _SensorCard({
-    required this.icon,
-    required this.label,
+  const _FeedLevelCard({
+    required this.data,
+    required this.context,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final percent = data.feedMax > 0
+        ? (data.feedLevel / data.feedMax).clamp(0.0, 1.0)
+        : 0.0;
+    final percentValue = (percent * 100).toInt();
+    
+    // Determine feed status based on percentage
+    String feedStatus;
+    Color statusBgColor;
+    Color statusTextColor;
+    
+    if (percentValue < 30) {
+      feedStatus = 'Low';
+      statusBgColor = const Color(0xFFFFF3CD);
+      statusTextColor = const Color(0xFF856404);
+    } else if (percentValue >= 30 && percentValue <= 70) {
+      feedStatus = 'Normal';
+      statusBgColor = const Color(0xFFD4EDDA);
+      statusTextColor = const Color(0xFF28A745);
+    } else {
+      feedStatus = 'Full';
+      statusBgColor = const Color(0xFFD1ECFF);
+      statusTextColor = const Color(0xFF004085);
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.grain, color: Colors.orange, size: 24),
+              SizedBox(width: 8),
+              Text(
+                'Feed Level',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '$percentValue%',
+            style: const TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: Colors.black,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: statusBgColor,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              feedStatus,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: statusTextColor,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                // Add dispense functionality
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFD4C84E),
+                foregroundColor: Colors.black,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text(
+                'Dispense Now',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Water Level Card ───────────────────────────────────────────
+class _WaterLevelCard extends StatelessWidget {
+  final SensorData data;
+  final BuildContext context;
+
+  const _WaterLevelCard({
+    required this.data,
+    required this.context,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Map water level string to percentage and status
+    int waterPercent;
+    String waterStatus;
+    Color statusBgColor;
+    Color statusTextColor;
+    
+    final waterLevelLower = data.waterLevel.toLowerCase();
+    
+    if (waterLevelLower == 'full') {
+      waterPercent = 100;
+      waterStatus = 'Full';
+      statusBgColor = const Color(0xFFD1ECFF);
+      statusTextColor = const Color(0xFF004085);
+    } else if (waterLevelLower == 'normal') {
+      waterPercent = 70;
+      waterStatus = 'Normal';
+      statusBgColor = const Color(0xFFD4EDDA);
+      statusTextColor = const Color(0xFF28A745);
+    } else if (waterLevelLower == 'low') {
+      waterPercent = 30;
+      waterStatus = 'Low';
+      statusBgColor = const Color(0xFFFFF3CD);
+      statusTextColor = const Color(0xFF856404);
+    } else if (waterLevelLower == 'empty') {
+      waterPercent = 0;
+      waterStatus = 'Empty';
+      statusBgColor = const Color(0xFFFFEAEA);
+      statusTextColor = const Color(0xFFFF6B6B);
+    } else {
+      waterPercent = 50;
+      waterStatus = 'Unknown';
+      statusBgColor = const Color(0xFFF0F0F0);
+      statusTextColor = const Color(0xFF666666);
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.water_drop, color: Colors.blue, size: 24),
+              SizedBox(width: 8),
+              Text(
+                'Water Level',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '$waterPercent%',
+            style: const TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: Colors.black,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: statusBgColor,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              waterStatus,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: statusTextColor,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () async {
+                    try {
+                      await FirebaseService().quickDispense(AppConstants.quickDispenseSeconds);
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Dispensing feed for ${AppConstants.quickDispenseSeconds}s...'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    } catch (_) {
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Failed to trigger dispense.')),
+                      );
+                    }
+                  },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFD4C84E),
+                foregroundColor: Colors.black,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text(
+                'Dispense Now',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Temperature/Humidity Card ──────────────────────────────────
+class _TempHumCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final IconData icon;
+  final Color iconColor;
+  final String status;
+  final Color statusColor;
+
+  const _TempHumCard({
+    required this.title,
     required this.value,
-    required this.statusLabel,
-    required this.statusColor,
+    required this.icon,
     required this.iconColor,
+    required this.status,
+    required this.statusColor,
   });
 
   @override
@@ -355,66 +602,54 @@ class _SensorCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color.fromARGB(255, 235, 235, 235),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color.fromARGB(255, 206, 209, 213)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Icon + label row
           Row(
             children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: iconColor.withOpacity(0.40),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, color: iconColor, size: 20),
-              ),
+              Icon(icon, color: iconColor, size: 24),
               const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  label,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(  // ← CHANGE
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                  ),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
                 ),
               ),
             ],
           ),
-
-          const Spacer(),
-
-          // Main value
+          const SizedBox(height: 12),
           Text(
             value,
-             style: Theme.of(context).textTheme.displaySmall?.copyWith(  // ← CHANGE
-              fontSize: 24,
-              fontWeight: FontWeight.w900,
-              height: 2,
+            style: const TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: Colors.black,
             ),
           ),
-
-          const SizedBox(height: 15),
-
-          // Status badge
+          const SizedBox(height: 12),
           Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.40),
+              color: statusColor.withOpacity(0.15),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
-              statusLabel,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(  // ← CHANGE
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
+              status,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
                 color: statusColor,
               ),
             ),
@@ -425,63 +660,59 @@ class _SensorCard extends StatelessWidget {
   }
 }
 
-// ── Device states row ─────────────────────────────────────────
-class _DeviceStatesRow extends StatelessWidget {
+// ── Environmental Control Status ────────────────────────────────
+class _EnvironmentalControlStatus extends StatelessWidget {
   final SensorData data;
-  const _DeviceStatesRow({required this.data});
+
+  const _EnvironmentalControlStatus({required this.data});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+    final coolingFanActive = data.coolingFan;
+    final heatingLampActive = data.heatingLamp;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'DEVICE STATES',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(  // ← CHANGE
-              fontWeight: FontWeight.w900,
-              fontSize: 10,
-              color: const Color.fromARGB(255, 0, 0, 0),
-              letterSpacing: 0.8,
+          const Text(
+            'Environmental Control Status',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
-                child: _DeviceChip(
-                  icon: Icons.lightbulb_rounded,
-                  label: 'Heating\nLamp',
-                  isActive: data.heatingLamp,
-                  color: AppColors.heatingActive,
+                child: _DeviceStateBox(
+                  title: 'Cooling Fan',
+                  isActive: coolingFanActive,
+                  activeColor: Colors.blue,
+                  icon: Icons.cloud,
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Expanded(
-                child: _DeviceChip(
-                  icon: Icons.air_rounded,
-                  label: 'Cooling\nFan',
-                  isActive: data.coolingFan,
-                  color: AppColors.coolingActive,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _DeviceChip(
-                  icon: Icons.grain_rounded,
-                  label: 'Feeder\nMotor',
-                  isActive: data.feederActive,
-                  color: AppColors.feederActive,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _DeviceChip(
-                  icon: Icons.water_rounded,
-                  label: 'Water\nValve',
-                  isActive: data.waterActive,
-                  color: AppColors.waterActive,
+                child: _DeviceStateBox(
+                  title: 'Heating Lamp',
+                  isActive: heatingLampActive,
+                  activeColor: Colors.orange,
+                  icon: Icons.light_mode,
                 ),
               ),
             ],
@@ -492,54 +723,56 @@ class _DeviceStatesRow extends StatelessWidget {
   }
 }
 
-class _DeviceChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
+// ── Device State Box ───────────────────────────────────────────
+class _DeviceStateBox extends StatelessWidget {
+  final String title;
   final bool isActive;
-  final Color color;
+  final Color activeColor;
+  final IconData icon;
 
-  const _DeviceChip({
-    required this.icon,
-    required this.label,
+  const _DeviceStateBox({
+    required this.title,
     required this.isActive,
-    required this.color,
+    required this.activeColor,
+    required this.icon,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-  color: isActive ? color.withOpacity(0.25) : const Color.fromARGB(255, 232, 232, 232),
-  borderRadius: BorderRadius.circular(14),
-  border: Border.all(
-    color: isActive ? color : const Color.fromARGB(255, 230, 229, 229),
-    width: 1.5,
-  ),
-),
+        color: isActive ? activeColor.withOpacity(0.1) : const Color(0xFFF0F0F0),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isActive ? activeColor.withOpacity(0.3) : Colors.grey.shade300,
+          width: 1,
+        ),
+      ),
       child: Column(
         children: [
-          Icon(icon,
-              color: isActive ? color : const Color(0xFFBFBFBF),
-              size: 20),
-          const SizedBox(height: 4),
+          Icon(
+            icon,
+            color: isActive ? activeColor : Colors.grey,
+            size: 32,
+          ),
+          const SizedBox(height: 8),
           Text(
-            label,
+            title,
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(  // ← CHANGE
+            style: TextStyle(
               fontSize: 12,
-              fontWeight: FontWeight.w800,
-              color: isActive ? color : const Color(0xFFBFBFBF),
-              height: 1.2,
+              fontWeight: FontWeight.w600,
+              color: isActive ? activeColor : Colors.grey,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             isActive ? 'ON' : 'OFF',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(  // ← CHANGE
-              fontSize: 10,
+            style: TextStyle(
+              fontSize: 14,
               fontWeight: FontWeight.w700,
-              color: isActive ? color : const Color(0xFFBFBFBF),
+              color: isActive ? activeColor : Colors.grey,
             ),
           ),
         ],

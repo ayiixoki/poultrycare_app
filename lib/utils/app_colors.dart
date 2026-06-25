@@ -7,6 +7,17 @@ import 'package:flutter/material.dart';
 class AppColors {
   AppColors._();
 
+  static const Color primaryYellow = Color(0xFFD1C84E);
+  static const Color background = Color(0xFFF3F1EE);
+  static const Color card = Color(0xFFF8F8F8);
+
+  static const Color darkText = Color(0xFF232323);
+  static const Color mutedText = Color(0xFF7B7B7B);
+
+  static const Color feedGreen = Color(0xFF4CAF50);
+  static const Color waterBlue = Color(0xFF4A89DC);
+  static const Color hotRed = Color(0xFFFF5A4E);
+
   // ── Gradient colors ───────────────────────────────────────────
   static const Color gradientTop = Color(0xFFDAE62F);
   static const Color gradientBottom = Color(0xFFD2B335);
@@ -17,7 +28,6 @@ class AppColors {
   static const Color primaryLight = Color.fromARGB(255, 182, 182, 182);
 
   // ── Backgrounds ───────────────────────────────────────────
-  static const Color background = Color(0xFFF7F7F7);
   static const Color backgroundWarm = Color(0xFFF7F7F7);
   static const Color surface = Color.fromARGB(255, 240, 240, 240);
   static const Color surfaceElevated = Color(0xFFF7F7F7);
