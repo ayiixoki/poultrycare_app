@@ -254,63 +254,6 @@ Future<void> _saveNotifications(bool value) async {
                   ),
                   const SizedBox(height: 12),
 
-                  // ── Notifications ─────────────────────────────
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 14),
-                    decoration: BoxDecoration(
-                      color: _card,
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 42,
-                          height: 42,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFE3E2D6),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.notifications_none_rounded,
-                              color: Color(0xFF6B6B5E), size: 22),
-                        ),
-                        const SizedBox(width: 14),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Notifications',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.black,
-                                ),
-                              ),
-                              SizedBox(height: 2),
-                              Text(
-                                'Enable Alerts on Phone',
-                                style: TextStyle(
-                                    fontSize: 13, color: _subtitleGray),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Switch(
-                          value: _notificationsEnabled,
-                          activeColor: Colors.white,
-                          activeTrackColor: _green,
-                          onChanged: (v) {
-                            setState(() => _notificationsEnabled = v);
-                            _saveNotifications(v);
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 28),
-
                 ],
               ),
       ),
