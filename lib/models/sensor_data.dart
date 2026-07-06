@@ -24,12 +24,6 @@ class SensorData {
   /// Water level status: "FULL", "LOW", or "EMPTY".
   final String waterLevel;
 
-  /// Whether the heating lamp relay is currently ON.
-  final bool heatingLamp;
-
-  /// Whether the cooling/ventilation fan relay is currently ON.
-  final bool coolingFan;
-
   /// Whether the feeder motor is actively dispensing feed right now.
   final bool feederActive;
 
@@ -48,8 +42,6 @@ class SensorData {
     this.feedLevel = 0.0,
     this.feedMax = 5.0,
     this.waterLevel = 'UNKNOWN',
-    this.heatingLamp = false,
-    this.coolingFan = false,
     this.feederActive = false,
     this.waterActive = false,
     this.systemOnline = false,
@@ -71,8 +63,6 @@ class SensorData {
       feedLevel: (map['feed_level'] as num?)?.toDouble() ?? 0.0,
       feedMax: (map['feed_max'] as num?)?.toDouble() ?? 5.0,
       waterLevel: map['water_level'] as String? ?? 'UNKNOWN',
-      heatingLamp: map['heating_lamp'] as bool? ?? false,
-      coolingFan: map['cooling_fan'] as bool? ?? false,
       feederActive: map['feeder_active'] as bool? ?? false,
       waterActive: map['water_dispenser'] as bool? ?? false,
       systemOnline: map['system_online'] as bool? ?? false,
@@ -88,8 +78,6 @@ class SensorData {
       'feed_level': feedLevel,
       'feed_max': feedMax,
       'water_level': waterLevel,
-      'heating_lamp': heatingLamp,
-      'cooling_fan': coolingFan,
       'feeder_active': feederActive,
       'water_dispenser': waterActive,
       'system_online': systemOnline,
@@ -117,8 +105,6 @@ class SensorData {
       feedLevel: feedLevel ?? this.feedLevel,
       feedMax: feedMax ?? this.feedMax,
       waterLevel: waterLevel ?? this.waterLevel,
-      heatingLamp: heatingLamp ?? this.heatingLamp,
-      coolingFan: coolingFan ?? this.coolingFan,
       feederActive: feederActive ?? this.feederActive,
       waterActive: waterActive ?? this.waterActive,
       systemOnline: systemOnline ?? this.systemOnline,

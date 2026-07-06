@@ -63,35 +63,38 @@ class FeedingScreen extends StatelessWidget {
                 ),
               ),
 
-              // ── Empty state ───────────────────────────────────────────
-              if (schedules.isEmpty)
-                SliverFillRemaining(
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text('🌾', style: TextStyle(fontSize: 48)),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'No schedules yet',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
+             // ── Empty state ───────────────────────────────────────────
+            if (schedules.isEmpty)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 80),
+                  child: Column(
+                    children: [
+                      const Text(
+                        '🌾',
+                        style: TextStyle(fontSize: 48),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'No schedules yet',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Tap "Add Feeding Time" to create\nyour first schedule.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey.shade600,
-                          ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Tap "Add Feeding Time" to create\nyour first schedule.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey.shade600,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
+              ),
 
               // ── Schedule list ─────────────────────────────────────────
               if (schedules.isNotEmpty)

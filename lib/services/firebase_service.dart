@@ -13,6 +13,7 @@
 
 import 'package:firebase_database/firebase_database.dart';
 import '../models/sensor_data.dart';
+import '../models/actuator_state.dart';
 import '../models/feeding_schedule.dart';
 import '../models/activity_log.dart';
 import '../utils/constants.dart';
@@ -24,7 +25,11 @@ class FirebaseService {
   // regardless of how many widgets use this service.
   static final FirebaseService _instance = FirebaseService._internal();
   factory FirebaseService() => _instance;
-  FirebaseService._internal();
+  FirebaseService._internal() {
+    // Enable offline caching — must be called once, before any other DB calls
+    _db.setPersistenceEnabled(true);
+    _db.setPersistenceCacheSizeBytes(10000000); // 10MB cache
+  }
 
   // ── Firebase database reference (root) ───────────────────────────────────
   final FirebaseDatabase _db = FirebaseDatabase.instanceFor(
@@ -32,13 +37,49 @@ class FirebaseService {
   databaseURL: 'https://poultrycare-f816d-default-rtdb.asia-southeast1.firebasedatabase.app/',
 );
 
+
+
   // ── Convenience getters for frequently-used references ───────────────────
   DatabaseReference get _sensorRef => _db.ref(AppConstants.dbSensorData);
+  DatabaseReference get _actuatorsRef => _db.ref(AppConstants.dbActuators);
+    DatabaseReference get _deviceTokensRef => _db.ref(AppConstants.dbDeviceTokens);
   DatabaseReference get _schedulesRef => _db.ref(AppConstants.dbSchedules);
   DatabaseReference get _logsRef => _db.ref(AppConstants.dbLogs);
   DatabaseReference get _settingsRef => _db.ref(AppConstants.dbSettings);
   DatabaseReference get _thresholdsRef => _db.ref('thresholds');
   DatabaseReference get _notifRef => _db.ref('notifications_enabled');
+  DatabaseReference get _notificationsRef => _db.ref('notifications');
+
+Stream<List<Map<String, dynamic>>> notificationsStream() {
+  return _notificationsRef.limitToLast(50).onValue.map((event) {
+    if (!event.snapshot.exists) return [];
+    final map = event.snapshot.value as Map<dynamic, dynamic>;
+    final list = map.entries.map((e) {
+      final v = Map<String, dynamic>.from(e.value as Map);
+      v['id'] = e.key.toString();
+      return v;
+    }).toList();
+    list.sort((a, b) => (b['timestamp'] ?? '').toString().compareTo((a['timestamp'] ?? '').toString()));
+    return list;
+  });
+}
+
+  /// Marks key paths to stay cached locally even when no screen
+/// is actively listening — keeps dashboard/alerts usable offline.
+void enableOfflineSync() {
+  _sensorRef.keepSynced(true);
+  _actuatorsRef.keepSynced(true);
+  _schedulesRef.keepSynced(true);
+  _logsRef.keepSynced(true);
+  _thresholdsRef.keepSynced(true);
+}
+
+/// Streams whether the PHONE has an active connection to Firebase.
+Stream<bool> connectionStream() {
+  return _db.ref('.info/connected').onValue.map((event) {
+    return event.snapshot.value as bool? ?? false;
+  });
+}
 
   // ==========================================================================
   // SENSOR DATA — Real-time stream
@@ -55,6 +96,16 @@ class FirebaseService {
       if (!event.snapshot.exists) return const SensorData();
       final map = event.snapshot.value as Map<dynamic, dynamic>;
       return SensorData.fromMap(map);
+    });
+  }
+
+    /// Returns a continuous Stream of [ActuatorState] that updates whenever
+  /// the Pi's control loop changes a relay/servo state.
+  Stream<ActuatorState> actuatorsStream() {
+    return _actuatorsRef.onValue.map((event) {
+      if (!event.snapshot.exists) return const ActuatorState();
+      final map = event.snapshot.value as Map<dynamic, dynamic>;
+      return ActuatorState.fromMap(map);
     });
   }
 
@@ -105,6 +156,20 @@ class FirebaseService {
       type: LogType.feeding,
       title: 'Manual Feed Dispense',
       message: 'Quick dispense triggered (${seconds}s) via mobile app.',
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+    ));
+  }
+
+    /// Triggers a manual feed dispense of a specific gram amount.
+  Future<void> quickDispenseGrams(double grams) async {
+    await _sensorRef.child(AppConstants.dbFeederActive).set(true);
+    await _sensorRef.child('manual_dispense_grams').set(grams);
+
+    await addLog(ActivityLog(
+      id: '',
+      type: LogType.feeding,
+      title: 'Manual Feed Dispense',
+      message: 'Quick dispense triggered (${grams.toStringAsFixed(0)}g) via mobile app.',
       timestamp: DateTime.now().millisecondsSinceEpoch,
     ));
   }
@@ -188,6 +253,13 @@ Future<void> setNotificationsEnabled(bool value) async {
   await _notifRef.set(value);
 }
 
+/// Registers this device's FCM token so the Pi can send it push alerts.
+/// Stored as a map (token -> true) so multiple devices/phones can each
+/// have their own entry without overwriting each other.
+Future<void> saveDeviceToken(String token) async {
+  await _deviceTokensRef.child(token).set(true);
+}
+
   // ==========================================================================
   // ACTIVITY LOGS — write only (read is a stream)
   // ==========================================================================
@@ -263,6 +335,7 @@ Future<void> setNotificationsEnabled(bool value) async {
         'max_temp': AppConstants.defaultMaxTemp,
         'auto_climate': true,
         'auto_feeding': true,
+        //'manual_dispense_grams': 200.0,
       };
     }
     return Map<String, dynamic>.from(snap.value as Map);

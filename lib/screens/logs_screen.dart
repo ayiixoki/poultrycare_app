@@ -40,7 +40,7 @@ class _LogsScreenState extends State<LogsScreen> {
                 .where((l) => DateTime.fromMillisecondsSinceEpoch(l.timestamp)
                     .isAfter(todayStart))
                 .toList()
-              ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+              ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
             return CustomScrollView(
               physics: const BouncingScrollPhysics(),

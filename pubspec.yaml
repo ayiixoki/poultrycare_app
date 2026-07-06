@@ -4,7 +4,7 @@
 # Run: flutter pub get  after placing this file.
 # ============================================================
 
-name: poultrycare_app
+name: poultrycare
 description: "PoultryCare — IoT Smart Feeding & Environmental Control for Poultry Farms"
 publish_to: 'none'
 
@@ -27,16 +27,17 @@ dependencies:
   firebase_database: ^10.4.9
 
   # ── Firebase Cloud Messaging (push notifications for alerts) ───────────────
-  firebase_messaging: ^14.7.18
+  firebase_messaging: 14.9.4
 
   # ── Local notifications (show FCM alerts while app is in foreground) ───────
-  flutter_local_notifications: ^17.0.0
+  flutter_local_notifications: ^18.0.1
 
   # ── State management (Provider pattern) ────────────────────────────────────
   provider: ^6.1.2
 
   # ── Shared preferences (store simple local settings like user prefs) ───────
   shared_preferences: ^2.2.3
+  connectivity_plus: ^6.0.5
 
   # ── Gauge/chart widget for temperature display ─────────────────────────────
   syncfusion_flutter_gauges: ^25.1.35

@@ -29,6 +29,20 @@ class AppConstants {
   static const String dbSystemOnline = 'system_online';   // bool    true = Arduino connected
   static const String dbLastFeedTime = 'last_feed_time';  // int     Unix timestamp ms
 
+ // Root node for registered device FCM tokens (used to send push alerts).
+  static const String dbDeviceTokens = 'device_tokens';
+
+  // Root node for live actuator states (written by the Pi's control loop).
+  static const String dbActuators = 'actuators';
+
+  // Inside actuators, these are the individual field keys (camelCase — this
+  // node is intentionally separate from sensor_data's snake_case convention).
+  static const String dbActuatorHeatingLamp = 'heatingLamp';  // bool
+  static const String dbActuatorExhaustFan = 'exhaustFan';    // bool
+  static const String dbActuatorFeedServo = 'feedServo';      // bool
+  static const String dbActuatorWaterServo = 'waterServo';    // bool
+
+
   // Root node for feeding schedule entries.
   static const String dbSchedules = 'schedules';
 
