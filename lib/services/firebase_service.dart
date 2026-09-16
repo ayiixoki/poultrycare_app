@@ -135,10 +135,10 @@ Stream<bool> connectionStream() {
     await addLog(ActivityLog(
       id: '',
       type: LogType.climate,
-      title: isOn ? 'Cooling Fan ON' : 'Cooling Fan OFF',
+      title: isOn ? 'Exhaust Fan ON' : 'Exhaust Fan OFF',
       message: isOn
-          ? 'Cooling fan was manually activated via mobile app.'
-          : 'Cooling fan was manually deactivated via mobile app.',
+          ? 'Exhaust fan was manually activated via mobile app.'
+          : 'Exhaust fan was manually deactivated via mobile app.',
       timestamp: DateTime.now().millisecondsSinceEpoch,
     ));
   }

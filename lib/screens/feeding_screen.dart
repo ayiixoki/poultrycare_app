@@ -17,6 +17,17 @@ import '../services/firebase_service.dart';
 import '../utils/app_colors.dart';
 import '../utils/constants.dart';
 
+/// Converts a stored 24-hour "HH:mm" string to a 12-hour "h:mm AM/PM" string.
+String formatTime12h(String time24) {
+  final parts = time24.split(':');
+  final hour = int.tryParse(parts[0]) ?? 0;
+  final minute = parts.length > 1 ? parts[1].padLeft(2, '0') : '00';
+  final period = hour >= 12 ? 'PM' : 'AM';
+  var hour12 = hour % 12;
+  if (hour12 == 0) hour12 = 12;
+  return '$hour12:$minute $period';
+}
+
 class FeedingScreen extends StatelessWidget {
   const FeedingScreen({super.key});
 
@@ -259,7 +270,7 @@ class _ScheduleTile extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        schedule.time,
+                        formatTime12h(schedule.time),     // ← after
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -484,13 +495,11 @@ class _ScheduleFormDialogState extends State<_ScheduleFormDialog> {
                         const Icon(Icons.schedule, color: Colors.white, size: 20),
                         const SizedBox(width: 12),
                         Text(
-                          _selectedTime.format(context),
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
+                          MaterialLocalizations.of(context).formatTimeOfDay(
+                            _selectedTime,
+                            alwaysUse24HourFormat: false,
                           ),
-                        ),
+                        )
                       ],
                     ),
                   ),
