@@ -38,6 +38,18 @@ class FeedingSchedule {
     this.days = const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
   });
 
+  // ── Percent helpers ────────────────────────────────────────────────────
+  // The schedule editor UI picks 25/50/75/100% of a single feeding target
+  // (matches config.SCHEDULE_FEED_GRAMS on the Pi, e.g. 100g). Firebase and
+  // the Pi still only ever see amountGrams - percent is purely a display/
+  // input convenience layered on top, computed both ways here so there's
+  // one formula instead of it being duplicated across screens.
+  static int gramsFromPercent(int percent, {int targetGrams = 100}) =>
+      ((percent / 100) * targetGrams).round();
+
+  int percentOf({int targetGrams = 100}) =>
+      targetGrams > 0 ? ((amountGrams / targetGrams) * 100).round() : 0;
+
   // ── Factory: build from Firebase snapshot map ─────────────────────────────
   factory FeedingSchedule.fromMap(String id, Map<dynamic, dynamic> map) {
     // Firebase stores days as a comma-separated string for simplicity.

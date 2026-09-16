@@ -93,10 +93,8 @@ Widget build(BuildContext context) {
       final maxTemp = (thresholds['tempMax'] as num?)?.toDouble() ?? AppConstants.defaultMaxTemp;
       final minTemp = (thresholds['tempMin'] as num?)?.toDouble() ?? AppConstants.defaultMinTemp;
       final feedLowPercent = (thresholds['feedLow'] as num?)?.toDouble() ?? 30.0;
-      final manualDispenseGrams =
-          (thresholds['manualDispenseGrams'] as num?)?.toDouble() ?? 100.0;
       final humMax = (thresholds['humMax'] as num?)?.toDouble() ?? 80.0;
-      final humMin = 40.0;
+      final humMin = 50.0;
 
       return StreamBuilder<SensorData>(
         stream: FirebaseService().sensorStream(),
@@ -181,24 +179,7 @@ Widget build(BuildContext context) {
                           padding: const EdgeInsets.all(16),
                           child: Column(
                             children: [
-                              // Row 1: Feed Level & Water Level
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: _FeedLevelCard(
-                                      data: data,
-                                      feedLowPercent: feedLowPercent,
-                                      manualDispenseGrams: manualDispenseGrams,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: _WaterLevelCard(data: data),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              // Row 2: Temperature & Humidity
+                              // Row 1: Temperature & Humidity
                               Row(
                                 children: [
                                   Expanded(
@@ -221,6 +202,22 @@ Widget build(BuildContext context) {
                                       status: _humStatus(data.humidity, humMax, humMin),
                                       statusColor: _humColor(data.humidity, humMax, humMin),
                                     ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              // Row 2: Feed Level & Water Level
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _FeedLevelCard(
+                                      data: data,
+                                      feedLowPercent: feedLowPercent,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: _WaterLevelCard(data: data),
                                   ),
                                 ],
                               ),
@@ -438,20 +435,17 @@ class _FeedLevelCard extends StatelessWidget {
   // Now" button, set on the Settings screen. The Pi runs the feed
   // servo and polls the load cell until this weight is reached, then
   // closes — a closed-loop dispense, not a fixed timer.
-  final double manualDispenseGrams;
 
-  const _FeedLevelCard({
-    required this.data,
-    required this.feedLowPercent,
-    required this.manualDispenseGrams,
-  });
+const _FeedLevelCard({
+  required this.data,
+  required this.feedLowPercent,
+});
 
   @override
   Widget build(BuildContext context) {
-    final percent = data.feedMax > 0
-        ? (data.feedLevel / data.feedMax).clamp(0.0, 1.0)
-        : 0.0;
-    final percentValue = (percent * 100).toInt();
+    // Uses data.feedLevelPercent, which prefers the Pi-computed
+    // feed_percent field - same number the LCD displays.
+    final percentValue = (data.feedLevelPercent * 100).round();
     
     // Determine feed status based on percentage
     String feedStatus;
@@ -524,46 +518,6 @@ class _FeedLevelCard extends StatelessWidget {
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
                 color: statusTextColor,
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () async {
-                    try {
-                      await FirebaseService().quickDispenseGrams(manualDispenseGrams);
-                      if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                              'Dispensing ${manualDispenseGrams.toStringAsFixed(0)}g of feed...'),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
-                    } catch (_) {
-                      if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Failed to trigger dispense.')),
-                      );
-                    }
-                  },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFD4C84E),
-                foregroundColor: Colors.black,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              child: const Text(
-                'Dispense Now',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
               ),
             ),
           ),
@@ -669,50 +623,6 @@ switch (data.waterLevel.toLowerCase()) {
               ),
             ),
           ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () async {
-                  try {
-                    await FirebaseService().setWaterDispenser(true);
-
-                    if (!context.mounted) return;
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Dispensing water...'),
-                        backgroundColor: Colors.blue,
-                      ),
-                    );
-                  } catch (e) {
-                    if (!context.mounted) return;
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Failed to dispense water: $e'),
-                      ),
-                    );
-                  }
-                },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFD4C84E),
-                foregroundColor: Colors.black,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              child: const Text(
-                'Dispense Now',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -808,7 +718,7 @@ class _EnvironmentalControlStatus extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final coolingFanActive = data.exhaustFan;
+    final exhaustFanActive = data.exhaustFan;
     final heatingLampActive = data.heatingLamp;
 
     return Container(
@@ -840,12 +750,12 @@ class _EnvironmentalControlStatus extends StatelessWidget {
             children: [
               Expanded(
                 child: _DeviceStateBox(
-                  title: 'Cooling Fan',
-                  isActive: coolingFanActive,
-                  activeColor: Colors.blue,
-                  icon: Icons.cloud,
+                    title: 'Exhaust Fan',
+                    isActive: exhaustFanActive,
+                    activeColor: Colors.blue,
+                    icon: Icons.air,
+                  ),
                 ),
-              ),
               const SizedBox(width: 12),
               Expanded(
                 child: _DeviceStateBox(

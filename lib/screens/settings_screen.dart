@@ -3,7 +3,6 @@
 // ============================================================
 import '../services/firebase_service.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -36,13 +35,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // Feed level (relevant addition — see note below build method)
   double _feedAlertPercent = 30.0;
-
-  // Preferred manual feed dispense amount (grams). The Pi's
-  // dispense_feed() runs the servo and polls the load cell until the
-  // feeder reaches this weight, then closes — a closed-loop dispense,
-  // not a fixed timer. Saved to thresholds/manualDispenseGrams and
-  // sent as the target via FirebaseService().quickDispenseGrams().
-  double _manualDispenseGrams = 100.0;
 
   // Notifications
   bool _notificationsEnabled = true;
@@ -84,11 +76,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _feedAlertPercent =
           (data['feedLow'] as num?)?.toDouble() ?? 30;
 
-      _manualDispenseGrams =
-          (data['manualDispenseGrams'] as num?)?.toDouble() ?? 100.0;
-
       _notificationsEnabled = notifEnabled;
       _isLoading = false;
+
     });
   } catch (_) {
     setState(() => _isLoading = false);
@@ -165,37 +155,59 @@ Future<void> _saveNotifications(bool value) async {
 
                   // ── Temperature Limit ──────────────────────
                   _SliderCard(
-                    cardColor: _card,
-                    icon: Icons.local_fire_department,
-                    iconBg: const Color(0xFFFFE0B2),
+                    icon: Icons.local_fire_department_rounded,
                     iconColor: Colors.orange,
                     title: 'Minimum Temperature',
                     subtitle: 'Lamp turns ON below this',
                     value: _tempMin,
+                    min: 0.0,
+                    max: 50.0,
                     unit: '°C',
-                    min: 20,
-                    max: 40,
+                    onChanged: (value) {
+                      setState(() {
+                        _tempMin = value;
+                      });
+                    },
+                    onChangeEnd: (value) async {
+                      if (_tempMin >= _tempMax) {
+                        _tempMin = _tempMax - 0.5;
+                        setState(() {});
+                      }
+
+                      await _saveThreshold('tempMin', _tempMin);
+                    },
+                    cardColor: _card,
+                    iconBg: const Color(0xFFFFF3E0),
                     activeColor: _green,
-                    onChanged: (v) => setState(() => _tempMin = v),
-                    onChangeEnd: (v) => _saveThreshold('tempMin', v),
                   ),
                   const SizedBox(height: 12),
 
                   _SliderCard(
-                    cardColor: _card,
-                    icon: Icons.thermostat_rounded,
-                    iconBg: const Color(0xFFFBDADA),
-                    iconColor: const Color(0xFFE2574C),
-                    title: 'Maximum Temperature',
-                    subtitle: 'Fan turns ON above this',
-                    value: _tempMax,
-                    unit: '°C',
-                    min: 20,
-                    max: 45,
-                    activeColor: _green,
-                    onChanged: (v) => setState(() => _tempMax = v),
-                    onChangeEnd: (v) => _saveThreshold('tempMax', v),
-                  ),
+                  icon: Icons.thermostat_rounded,
+                  iconColor: Colors.red,
+                  title: 'Maximum Temperature',
+                  subtitle: 'Fan turns ON above this',
+                  value: _tempMax,
+                  min: 0.0,
+                  max: 50.0,
+                  unit: '°C',
+                  onChanged: (value) {
+                    setState(() {
+                      _tempMax = value;
+                    });
+                  },
+                  onChangeEnd: (value) async {
+                    if (_tempMax <= _tempMin) {
+                      _tempMax = _tempMin + 0.5;
+                      setState(() {});
+                    }
+
+                    await _saveThreshold('tempMax', _tempMax);
+                  },
+                  cardColor: _card,
+                  iconBg: const Color(0xFFFFDADA),
+                  activeColor: _green,
+                ),
                   const SizedBox(height: 12),
 
                   // ── Humidity Limit ──────────────────────────
@@ -233,24 +245,6 @@ Future<void> _saveNotifications(bool value) async {
                     onChanged: (v) =>
                         setState(() => _feedAlertPercent = v),
                     onChangeEnd: (v) => _saveThreshold('feedLow', v),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // ── Manual Feed Dispense Amount ──────────────
-                  _CustomAmountCard(
-                    cardColor: _card,
-                    icon: Icons.restaurant_rounded,
-                    iconBg: const Color(0xFFDCEEDD),
-                    iconColor: const Color(0xFF3FA34D),
-                    title: 'Manual Feed Dispense',
-                    subtitle: '"Dispense Button" target amount',
-                    unit: 'g',
-                    value: _manualDispenseGrams,
-                    min: 10,
-                    max: 1000,
-                    activeColor: _green,
-                    onChanged: (v) => setState(() => _manualDispenseGrams = v),
-                    onChangeEnd: (v) => _saveThreshold('manualDispenseGrams', v),
                   ),
                   const SizedBox(height: 12),
 
@@ -374,186 +368,6 @@ class _SliderCard extends StatelessWidget {
   }
 }
 
-// ── Custom amount card: header row + a direct text field where the
-//    user types the exact gram amount, clamped to [min, max] and
-//    saved once they're done editing.
-class _CustomAmountCard extends StatefulWidget {
-  final Color cardColor;
-  final IconData icon;
-  final Color iconBg;
-  final Color iconColor;
-  final String title;
-  final String subtitle;
-  final String unit;
-  final double value;
-  final double min;
-  final double max;
-  final Color activeColor;
-  final ValueChanged<double> onChanged;
-  final ValueChanged<double> onChangeEnd;
-
-  const _CustomAmountCard({
-    required this.cardColor,
-    required this.icon,
-    required this.iconBg,
-    required this.iconColor,
-    required this.title,
-    required this.subtitle,
-    required this.unit,
-    required this.value,
-    required this.min,
-    required this.max,
-    required this.activeColor,
-    required this.onChanged,
-    required this.onChangeEnd,
-  });
-
-  @override
-  State<_CustomAmountCard> createState() => _CustomAmountCardState();
-}
-
-class _CustomAmountCardState extends State<_CustomAmountCard> {
-  late final TextEditingController _controller;
-  late final FocusNode _focusNode;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller =
-        TextEditingController(text: widget.value.toStringAsFixed(0));
-    _focusNode = FocusNode();
-    _focusNode.addListener(() {
-      // Save as soon as the field loses focus (user tapped away).
-      if (!_focusNode.hasFocus) _submit();
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    final parsed = double.tryParse(_controller.text);
-    if (parsed == null) {
-      // Invalid input — reset to the last known good value.
-      _controller.text = widget.value.toStringAsFixed(0);
-      return;
-    }
-    final clamped = parsed.clamp(widget.min, widget.max);
-    _controller.text = clamped.toStringAsFixed(0);
-    widget.onChanged(clamped);
-    widget.onChangeEnd(clamped);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: widget.cardColor,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: widget.iconBg,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(widget.icon, color: widget.iconColor, size: 22),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.title,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.black,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      widget.subtitle,
-                      style: const TextStyle(
-                          fontSize: 13, color: Color(0xFF8A8A8A)),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _controller,
-                  focusNode: _focusNode,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: false),
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.black,
-                  ),
-                  decoration: InputDecoration(
-                    isDense: true,
-                    contentPadding:
-                        const EdgeInsets.symmetric(vertical: 12),
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide:
-                          const BorderSide(color: Color(0xFFDDDAD2)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide:
-                          BorderSide(color: widget.activeColor, width: 2),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide:
-                          const BorderSide(color: Color(0xFFDDDAD2)),
-                    ),
-                    suffixText: widget.unit,
-                    suffixStyle: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF8A8A8A),
-                    ),
-                  ),
-                  onSubmitted: (_) => _submit(),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Range: ${widget.min.toStringAsFixed(0)}–${widget.max.toStringAsFixed(0)}${widget.unit}',
-            style: const TextStyle(fontSize: 12, color: Color(0xFF8A8A8A)),
-          ),
-        ],
-      ),
-    );
-  }
-}
 class _RingThumbShape extends SliderComponentShape {
   final Color ringColor;
   const _RingThumbShape({required this.ringColor});

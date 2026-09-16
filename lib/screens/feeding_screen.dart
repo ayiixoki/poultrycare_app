@@ -209,14 +209,13 @@ class _ScheduleTile extends StatelessWidget {
     required this.onDelete,
   });
 
-  String _getPortionLabel(int grams) {
-    if (grams < 200) {
-      return 'Small Portion';
-    } else if (grams < 400) {
-      return 'Medium Portion';
-    } else {
-      return 'Large Portion';
-    }
+  // Portion label now reflects percent of a single feeding target
+  // (schedule.percentOf(), backed by FeedingSchedule.amountGrams) instead
+  // of arbitrary grams thresholds - so it stays correct even if the
+  // per-feeding target on the Pi ever changes.
+  String _getPortionLabel(FeedingSchedule schedule) {
+    final percent = schedule.percentOf();
+    return '$percent% Portion';
   }
 
   @override
@@ -268,7 +267,7 @@ class _ScheduleTile extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        _getPortionLabel(schedule.amountGrams),
+                        _getPortionLabel(schedule),
                         style: TextStyle(
                           fontSize: 13,
                           color: Colors.grey.shade600,
@@ -336,8 +335,10 @@ class _ScheduleFormDialog extends StatefulWidget {
 }
 
 class _ScheduleFormDialogState extends State<_ScheduleFormDialog> {
+  static const List<int> _percentOptions = [25, 50, 75, 100];
+
   late TimeOfDay _selectedTime;
-  late TextEditingController _gramsCtrl;
+  late int _selectedPercent;
   late List<String> _selectedDays;
   bool _isSaving = false;
 
@@ -352,19 +353,19 @@ class _ScheduleFormDialogState extends State<_ScheduleFormDialog> {
         hour: int.tryParse(parts[0]) ?? 6,
         minute: int.tryParse(parts[1]) ?? 0,
       );
-      _gramsCtrl = TextEditingController(text: s.amountGrams.toString());
+      // Snap to the closest of the 4 options in case the stored amount
+      // doesn't land exactly on 25/50/75/100 (e.g. an older grams-based
+      // schedule saved before this change).
+      final existingPercent = s.percentOf();
+      _selectedPercent = _percentOptions.reduce(
+        (a, b) => (existingPercent - a).abs() < (existingPercent - b).abs() ? a : b,
+      );
       _selectedDays = List.from(s.days);
     } else {
       _selectedTime = const TimeOfDay(hour: 6, minute: 0);
-      _gramsCtrl = TextEditingController(text: '500');
+      _selectedPercent = 100;
       _selectedDays = List.from(AppConstants.weekDays);
     }
-  }
-
-  @override
-  void dispose() {
-    _gramsCtrl.dispose();
-    super.dispose();
   }
 
   Future<void> _pickTime() async {
@@ -378,13 +379,7 @@ class _ScheduleFormDialogState extends State<_ScheduleFormDialog> {
   }
 
   Future<void> _save() async {
-    final grams = int.tryParse(_gramsCtrl.text);
-    if (grams == null || grams <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid grams amount')),
-      );
-      return;
-    }
+    final grams = FeedingSchedule.gramsFromPercent(_selectedPercent);
 
     if (_selectedDays.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -503,7 +498,7 @@ class _ScheduleFormDialogState extends State<_ScheduleFormDialog> {
 
                 const SizedBox(height: 24),
 
-                // ── Portion Size ───────────────────────────────────────
+                // ── Portion Size (% of one feeding target) ──────────────
                 Text(
                   'PORTION SIZE',
                   style: const TextStyle(
@@ -514,39 +509,55 @@ class _ScheduleFormDialogState extends State<_ScheduleFormDialog> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _gramsCtrl,
-                          keyboardType: TextInputType.number,
-                          style: const TextStyle(
-                            color: Colors.black,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
-                          ),
-                          decoration: InputDecoration(
-                            hintText: '500',
-                            hintStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
-                            border: InputBorder.none,
-                            isDense: true,
+                Row(
+                  children: _percentOptions.map((percent) {
+                    final isSelected = _selectedPercent == percent;
+                    return Expanded(
+                      child: Padding(
+                        padding: EdgeInsets.only(
+                          right: percent != _percentOptions.last ? 8 : 0,
+                        ),
+                        child: GestureDetector(
+                          onTap: () => setState(() => _selectedPercent = percent),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? Colors.black.withOpacity(0.3)
+                                  : Colors.black.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: isSelected
+                                    ? Colors.white
+                                    : Colors.white.withOpacity(0.3),
+                                width: isSelected ? 2 : 1,
+                              ),
+                            ),
+                            child: Center(
+                              child: Text(
+                                '$percent%',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : Colors.white.withOpacity(0.7),
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                      Text(
-                        ' grams',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.8),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '≈ ${FeedingSchedule.gramsFromPercent(_selectedPercent)}g',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.7),
+                    fontSize: 12,
                   ),
                 ),
 

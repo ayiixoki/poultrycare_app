@@ -321,6 +321,10 @@ Future<void> saveDeviceToken(String token) async {
     if (updates.isNotEmpty) await _logsRef.update(updates);
   }
 
+  /// Deletes every log entry.
+  Future<void> clearAllLogs() async {
+    await _logsRef.remove();
+  }
   // ==========================================================================
   // SETTINGS — read and write
   // ==========================================================================
