@@ -42,7 +42,7 @@ class FirebaseService {
   // ── Convenience getters for frequently-used references ───────────────────
   DatabaseReference get _sensorRef => _db.ref(AppConstants.dbSensorData);
   DatabaseReference get _actuatorsRef => _db.ref(AppConstants.dbActuators);
-    DatabaseReference get _deviceTokensRef => _db.ref(AppConstants.dbDeviceTokens);
+  DatabaseReference get _deviceTokensRef => _db.ref(AppConstants.dbDeviceTokens);
   DatabaseReference get _schedulesRef => _db.ref(AppConstants.dbSchedules);
   DatabaseReference get _logsRef => _db.ref(AppConstants.dbLogs);
   DatabaseReference get _settingsRef => _db.ref(AppConstants.dbSettings);
@@ -50,17 +50,20 @@ class FirebaseService {
   DatabaseReference get _notifRef => _db.ref('notifications_enabled');
   DatabaseReference get _notificationsRef => _db.ref('notifications');
 
-Stream<List<Map<String, dynamic>>> notificationsStream() {
-  return _notificationsRef.limitToLast(50).onValue.map((event) {
-    if (!event.snapshot.exists) return [];
-    final map = event.snapshot.value as Map<dynamic, dynamic>;
-    final list = map.entries.map((e) {
-      final v = Map<String, dynamic>.from(e.value as Map);
-      v['id'] = e.key.toString();
-      return v;
-    }).toList();
-    list.sort((a, b) => (b['timestamp'] ?? '').toString().compareTo((a['timestamp'] ?? '').toString()));
-    return list;
+Stream<List<MapEntry<String, dynamic>>> notificationsStream({int limit = 50}) {
+  return FirebaseDatabase.instance
+      .ref('notifications')
+      .limitToLast(limit)
+      .onValue
+      .map((event) {
+    final raw = event.snapshot.value;
+    if (raw is! Map) return <MapEntry<String, dynamic>>[];
+    final entries = raw.entries
+        .map((e) => MapEntry(e.key.toString(), e.value))
+        .toList();
+    // Firebase push keys sort chronologically as strings.
+    entries.sort((a, b) => a.key.compareTo(b.key));
+    return entries.reversed.toList(); // newest first
   });
 }
 
@@ -113,6 +116,56 @@ Stream<bool> connectionStream() {
   // DEVICE CONTROLS — Write commands back to Firebase
   // The Arduino listens to these paths and reacts accordingly.
   // ==========================================================================
+
+  Future<void> triggerManualFeed({int grams = AppConstants.defaultManualDispenseGrams}) async {
+    await FirebaseDatabase.instance.ref('sensor_data').update({
+      'feeder_active': true,
+      'manual_dispense_grams': grams,
+    });
+  }
+  /// Triggers a manual feed dispense sized from the user's saved
+/// "Manual Dispense Amount" setting (Settings screen), expressed
+/// as a % of hopper capacity.
+///
+/// This is ONLY for the app's own "Dispense Now" button — the LCD's
+/// physical button is a completely separate control path (it reads
+/// grams from a local file on the Pi, not from Firebase) and is not
+/// affected by this at all.
+Future<void> triggerManualFeedFromSettings() async {
+  int grams = AppConstants.defaultManualDispenseGrams;
+
+  try {
+    final thresholdSnap = await _thresholdsRef.get();
+    final sensorSnap = await _sensorRef.get();
+
+    double? percent;
+    if (thresholdSnap.exists) {
+      final thresholds = Map<String, dynamic>.from(thresholdSnap.value as Map);
+      percent = (thresholds['manualDispensePercent'] as num?)?.toDouble();
+    }
+
+    if (percent != null && sensorSnap.exists) {
+      final sensor = Map<String, dynamic>.from(sensorSnap.value as Map);
+      final feedWeight = (sensor['feed_weight'] as num?)?.toDouble();
+      final feedPercent = (sensor['feed_percent'] as num?)?.toDouble();
+
+      if (feedWeight != null && feedPercent != null && feedPercent > 0) {
+        final capacityGrams = feedWeight / (feedPercent / 100);
+        grams = (capacityGrams * (percent / 100)).round();
+      }
+    }
+  } catch (_) {
+    // Fall back to the hardcoded default rather than blocking the dispense.
+  }
+
+  await triggerManualFeed(grams: grams);
+}
+
+  Future<void> triggerManualWater() async {
+    await FirebaseDatabase.instance.ref('sensor_data').update({
+      'water_dispenser': true,
+    });
+  }
 
   /// Turns the heating lamp ON (true) or OFF (false).
   Future<void> setHeatingLamp(bool isOn) async {
@@ -350,4 +403,3 @@ Future<void> saveDeviceToken(String token) async {
     await _settingsRef.update(settings);
   }
 }
-

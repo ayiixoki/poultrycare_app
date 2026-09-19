@@ -238,7 +238,7 @@ class AppTheme {
       // ── Bottom Navigation Bar ──────────────────────────────
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: AppColors.surface,
-        selectedItemColor: AppColors.primary,
+        selectedItemColor: const Color(0xFFFFD900),
         unselectedItemColor: AppColors.textTertiary,
         type: BottomNavigationBarType.fixed,
         elevation: 0,
@@ -273,9 +273,9 @@ class AppTheme {
 
       // ── Snackbar Theme ─────────────────────────────────────
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: AppColors.surfaceHighlight,
+        backgroundColor: const Color(0xFFFFD900),       // dark background instead of near-white
         contentTextStyle: GoogleFonts.nunito(
-          color: Colors.white,
+          color: const Color.fromARGB(255, 33, 32, 32),             // light text against the dark bg
           fontSize: 14,
         ),
         shape: RoundedRectangleBorder(

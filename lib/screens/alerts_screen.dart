@@ -1,20 +1,15 @@
 // ============================================================
-// lib/screens/alerts_screen.dart — Alerts Screen
+// lib/screens/alerts_screen.dart — Alerts Screen (active only)
 // ============================================================
-// Shows recent farm notifications and alerts based on sensor data.
-// All alerts are dynamically generated from Firebase sensor values.
-// Thresholds are read from Firebase /thresholds node so they
-// stay in sync with whatever the farmer sets in Settings.
-//
-// Alert types:
-//   • Temperature alerts (too hot/too cold)
-//   • Water level alerts
-//   • Feed level alerts
-//   • Feeding completion notifications
+// Shows ONLY currently-active problems, derived live from the
+// current sensor reading vs thresholds (same style as the
+// dashboard's alert banner). No history here — that lives in
+// logs_screen.dart. This means:
+//   • Exactly one alert per active problem, no repeats
+//   • Alert disappears automatically once the value is normal
 // ============================================================
 
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../models/sensor_data.dart';
 import '../services/firebase_service.dart';
 import '../utils/constants.dart';
@@ -28,27 +23,20 @@ class ClimateScreen extends StatelessWidget {
       stream: FirebaseService().thresholdsStream(),
       builder: (context, threshSnap) {
         final thresholds = threshSnap.data ?? {};
-        final maxTemp = (thresholds['tempMax'] as num?)?.toDouble()
-            ?? AppConstants.defaultMaxTemp;
-        final minTemp = (thresholds['tempMin'] as num?)?.toDouble()
-            ?? AppConstants.defaultMinTemp;
-        final feedLowPercent = (thresholds['feedLow'] as num?)?.toDouble()
-            ?? 30.0;
+        final maxTemp = (thresholds['tempMax'] as num?)?.toDouble() ?? AppConstants.defaultMaxTemp;
+        final minTemp = (thresholds['tempMin'] as num?)?.toDouble() ?? AppConstants.defaultMinTemp;
+        final feedLowPercent = (thresholds['feedLow'] as num?)?.toDouble() ?? 30.0;
+        final humMax = (thresholds['humMax'] as num?)?.toDouble() ?? 80.0;
+        const humMin = 50.0;
 
         return StreamBuilder<SensorData>(
           stream: FirebaseService().sensorStream(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting &&
-                !snapshot.hasData) {
-              return const Center(child: CircularProgressIndicator());
-            }
+          builder: (context, sensorSnap) {
+            final data = sensorSnap.data ?? const SensorData();
 
-            final data = snapshot.data ?? const SensorData();
-
-            // Only generate alerts when Pi is actually online
-            final alerts = data.systemOnline
-                ? _generateAlerts(data, maxTemp, minTemp, feedLowPercent)
-                : <Alert>[];
+            final activeAlerts = _activeAlerts(
+              data, maxTemp, minTemp, humMax, humMin, feedLowPercent,
+            );
 
             return Container(
               color: const Color(0xFFF5F5F5),
@@ -71,7 +59,7 @@ class ClimateScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Recent farm notifications',
+                            'Current farm status',
                             style: TextStyle(
                               fontSize: 14,
                               color: Colors.grey.shade600,
@@ -93,9 +81,7 @@ class ClimateScreen extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: const Color(0xFFF0F0F0),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: Colors.grey.shade300,
-                            ),
+                            border: Border.all(color: Colors.grey.shade300),
                           ),
                           child: Row(
                             children: [
@@ -115,31 +101,28 @@ class ClimateScreen extends StatelessWidget {
                       ),
                     ),
 
-                  // ── Empty state ──────────────────────────────
-                  if (alerts.isEmpty)
+                  // ── All-clear state ──────────────────────────
+                  if (activeAlerts.isEmpty && data.systemOnline)
                     SliverFillRemaining(
                       child: Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text('✓',
-                                style: TextStyle(fontSize: 48)),
-                            const SizedBox(height: 16),
-                            const Text(
+                          children: const [
+                            Text('✓', style: TextStyle(fontSize: 48)),
+                            SizedBox(height: 16),
+                            Text(
                               'All systems normal',
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
-                            const SizedBox(height: 8),
+                            SizedBox(height: 8),
                             Text(
-                              data.systemOnline
-                                  ? 'No alerts at this time.'
-                                  : 'Waiting for device to come online.',
+                              'No active alerts.',
                               style: TextStyle(
                                 fontSize: 14,
-                                color: Colors.grey.shade600,
+                                color: Colors.grey,
                               ),
                             ),
                           ],
@@ -147,13 +130,13 @@ class ClimateScreen extends StatelessWidget {
                       ),
                     ),
 
-                  // ── Alerts list ──────────────────────────────
-                  if (alerts.isNotEmpty)
+                  // ── Active alerts list (live, deduped) ───────
+                  if (activeAlerts.isNotEmpty)
                     SliverList(
                       delegate: SliverChildBuilderDelegate(
                         (context, index) =>
-                            _AlertCard(alert: alerts[index]),
-                        childCount: alerts.length,
+                            _AlertCard(alert: activeAlerts[index]),
+                        childCount: activeAlerts.length,
                       ),
                     ),
 
@@ -167,97 +150,96 @@ class ClimateScreen extends StatelessWidget {
     );
   }
 
-  List<Alert> _generateAlerts(
+  // Derives the CURRENT set of active problems directly from live
+  // sensor data. This is what makes alerts disappear automatically
+  // once the underlying value returns to normal — no dedup needed.
+  List<Alert> _activeAlerts(
     SensorData data,
     double maxTemp,
     double minTemp,
+    double humMax,
+    double humMin,
     double feedLowPercent,
   ) {
+    if (!data.systemOnline) return [];
     final alerts = <Alert>[];
 
-    // ── Temperature alert ──────────────────────────────────────
     if (data.temperature > maxTemp) {
       alerts.add(Alert(
         type: 'temperature',
         title: 'Temperature High',
         description:
-            'Now ${data.temperature.toStringAsFixed(1)}°C — cooling fan turned ON.',
+            'Currently ${data.temperature.toStringAsFixed(1)}°C — cooling fan is ON.',
         icon: Icons.thermostat,
         backgroundColor: const Color(0xFFFFEAEA),
         iconColor: const Color(0xFFFF6B6B),
-        timestamp: DateTime.now(),
       ));
     } else if (data.temperature < minTemp) {
       alerts.add(Alert(
         type: 'temperature',
         title: 'Temperature Low',
         description:
-            'Now ${data.temperature.toStringAsFixed(1)}°C — heating lamp turned ON.',
+            'Currently ${data.temperature.toStringAsFixed(1)}°C — heating lamp is ON.',
         icon: Icons.thermostat,
         backgroundColor: const Color(0xFFE3F2FD),
         iconColor: const Color(0xFF2196F3),
-        timestamp: DateTime.now(),
       ));
     }
 
-    // ── Water level alert ──────────────────────────────────────
-    if (data.waterLevel.toLowerCase() == 'low') {
+    if (data.humidity > humMax) {
       alerts.add(Alert(
-        type: 'water',
-        title: 'Water Level Low',
-        description: 'Water is running low. Please refill soon.',
-        icon: Icons.water_drop,
+        type: 'humidity',
+        title: 'Humidity High',
+        description:
+            'Currently ${data.humidity.toStringAsFixed(0)}% — exhaust fan is ON.',
+        icon: Icons.water,
         backgroundColor: const Color(0xFFFFF3CD),
         iconColor: const Color(0xFFFFA500),
-        timestamp: DateTime.now(),
       ));
-    } else if (data.waterLevel.toLowerCase() == 'empty') {
+    } else if (data.humidity < humMin) {
       alerts.add(Alert(
-        type: 'water',
-        title: 'Water Level Empty',
-        description: 'Water container is empty. Refill immediately!',
-        icon: Icons.water_drop,
-        backgroundColor: const Color(0xFFFFEAEA),
-        iconColor: const Color(0xFFFF6B6B),
-        timestamp: DateTime.now(),
+        type: 'humidity',
+        title: 'Humidity Low',
+        description: 'Currently ${data.humidity.toStringAsFixed(0)}%.',
+        icon: Icons.water,
+        backgroundColor: const Color(0xFFFFF3CD),
+        iconColor: const Color(0xFFFFA500),
       ));
     }
 
-    // ── Feed level alert ───────────────────────────────────────
-    // feedLowPercent from Firebase is 0–100, feedLevelPercent is 0.0–1.0
-    if (data.feedLevelPercent < (feedLowPercent / 100)) {
+    final feedPercent = (data.feedLevelPercent * 100);
+    if (feedPercent < feedLowPercent) {
       alerts.add(Alert(
         type: 'feed',
         title: 'Feed Level Low',
-        description:
-            'Feed at ${(data.feedLevelPercent * 100).toStringAsFixed(0)}%. Refill when possible.',
+        description: 'Feed at ${feedPercent.toStringAsFixed(0)}%. Refill when possible.',
         icon: Icons.grain,
         backgroundColor: const Color(0xFFFFF3CD),
         iconColor: const Color(0xFFFFA500),
-        timestamp: DateTime.now(),
       ));
     }
 
-    // ── Feeding complete notification ──────────────────────────
-    if (data.lastFeedTime > 0) {
-      final lastFeedDuration = DateTime.now().difference(
-          DateTime.fromMillisecondsSinceEpoch(data.lastFeedTime));
-      if (lastFeedDuration.inMinutes < 5) {
-        alerts.insert(
-          0,
-          Alert(
-            type: 'feeding',
-            title: 'Feeding Complete',
-            description:
-                '${(data.feedLevelPercent * 100).toStringAsFixed(0)}% portion dispensed.',
-            icon: Icons.check_circle,
-            backgroundColor: const Color(0xFFD4EDDA),
-            iconColor: const Color(0xFF28A745),
-            timestamp:
-                DateTime.fromMillisecondsSinceEpoch(data.lastFeedTime),
-          ),
-        );
-      }
+    switch (data.waterLevel.toLowerCase()) {
+      case 'empty':
+        alerts.add(Alert(
+          type: 'water',
+          title: 'Water Container Empty',
+          description: 'Refill required immediately.',
+          icon: Icons.water_drop,
+          backgroundColor: const Color(0xFFF8D7DA),
+          iconColor: const Color(0xFFDC3545),
+        ));
+        break;
+      case 'low':
+        alerts.add(Alert(
+          type: 'water',
+          title: 'Water Level Low',
+          description: 'Water is running low. Please refill soon.',
+          icon: Icons.water_drop,
+          backgroundColor: const Color(0xFFFFF3CD),
+          iconColor: const Color(0xFFFFA500),
+        ));
+        break;
     }
 
     return alerts;
@@ -272,7 +254,6 @@ class Alert {
   final IconData icon;
   final Color backgroundColor;
   final Color iconColor;
-  final DateTime timestamp;
 
   Alert({
     required this.type,
@@ -281,23 +262,7 @@ class Alert {
     required this.icon,
     required this.backgroundColor,
     required this.iconColor,
-    required this.timestamp,
   });
-
-  String get timeAgo {
-    final now = DateTime.now();
-    final difference = now.difference(timestamp);
-
-    if (difference.inSeconds < 60) {
-      return 'Just now';
-    } else if (difference.inMinutes < 60) {
-      return '${difference.inMinutes} min ago';
-    } else if (difference.inHours < 24) {
-      return '${difference.inHours}h ago';
-    } else {
-      return DateFormat('MMM d, h:mm a').format(timestamp);
-    }
-  }
 }
 
 // ── Alert Card ─────────────────────────────────────────────────────────────
@@ -323,7 +288,6 @@ class _AlertCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Icon ──────────────────────────────────────────
             Container(
               width: 48,
               height: 48,
@@ -331,14 +295,9 @@ class _AlertCard extends StatelessWidget {
                 color: alert.iconColor.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(
-                alert.icon,
-                color: alert.iconColor,
-                size: 24,
-              ),
+              child: Icon(alert.icon, color: alert.iconColor, size: 24),
             ),
             const SizedBox(width: 12),
-            // ── Title and description ──────────────────────────
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -361,23 +320,29 @@ class _AlertCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  Text(
-                    alert.timeAgo,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: alert.iconColor.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      'Active now',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: alert.iconColor,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-            // ── Warning icon (top right, not shown for feeding) ─
-            if (alert.type != 'feeding')
-              Icon(
-                Icons.warning_rounded,
-                color: alert.iconColor.withOpacity(0.4),
-                size: 20,
-              ),
+            Icon(
+              Icons.warning_rounded,
+              color: alert.iconColor.withOpacity(0.4),
+              size: 20,
+            ),
           ],
         ),
       ),

@@ -23,7 +23,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // 'settings' node, so this screen stays the single source of truth
   // for the same data everything else already relies on.
 
-
   bool _isLoading = true;
 
   // Temperature
@@ -39,6 +38,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // Notifications
   bool _notificationsEnabled = true;
 
+  // Manual dispense amount — configured here, triggered from the
+  // Dashboard's own "Dispense Now" button (not duplicated on this screen).
+  double _manualDispensePercent = 20.0;
+
   @override
   void initState() {
     super.initState();
@@ -47,83 +50,83 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadSettings() async {
     try {
-    final data = await FirebaseService().getThresholds();
-    final notifEnabled =
-        await FirebaseService().getNotificationsEnabled();
+      final data = await FirebaseService().getThresholds();
+      final notifEnabled = await FirebaseService().getNotificationsEnabled();
 
-    double minTemp =
-        (data['tempMin'] as num?)?.toDouble() ?? 30;
+      double minTemp = (data['tempMin'] as num?)?.toDouble() ?? 30;
+      double maxTemp = (data['tempMax'] as num?)?.toDouble() ?? 35;
 
-    double maxTemp =
-        (data['tempMax'] as num?)?.toDouble() ?? 35;
+      // Prevent invalid range
+      if (minTemp >= maxTemp) {
+        minTemp = 30;
+        maxTemp = 35;
 
-    // Prevent invalid range
-    if (minTemp >= maxTemp) {
-      minTemp = 30;
-      maxTemp = 35;
+        await FirebaseService().saveThreshold('tempMin', minTemp);
+        await FirebaseService().saveThreshold('tempMax', maxTemp);
+      }
 
-      await FirebaseService().saveThreshold('tempMin', minTemp);
-      await FirebaseService().saveThreshold('tempMax', maxTemp);
+      final manualDispensePercent =
+          (data['manualDispensePercent'] as num?)?.toDouble() ?? 20;
+
+      setState(() {
+        _tempMin = minTemp;
+        _tempMax = maxTemp;
+
+        _humidityLimit = (data['humMax'] as num?)?.toDouble() ?? 70;
+
+        _feedAlertPercent = (data['feedLow'] as num?)?.toDouble() ?? 30;
+
+        _manualDispensePercent = manualDispensePercent;
+
+        _notificationsEnabled = notifEnabled;
+        _isLoading = false;
+      });
+    } catch (_) {
+      setState(() => _isLoading = false);
     }
-
-    setState(() {
-      _tempMin = minTemp;
-      _tempMax = maxTemp;
-
-      _humidityLimit =
-          (data['humMax'] as num?)?.toDouble() ?? 70;
-
-      _feedAlertPercent =
-          (data['feedLow'] as num?)?.toDouble() ?? 30;
-
-      _notificationsEnabled = notifEnabled;
-      _isLoading = false;
-
-    });
-  } catch (_) {
-    setState(() => _isLoading = false);
   }
-}
 
-Future<void> _saveThreshold(String key, double value) async {
-  try {
-    if (key == 'tempMin' && value >= _tempMax) {
+  Future<void> _saveThreshold(String key, double value) async {
+    try {
+      if (key == 'tempMin' && value >= _tempMax) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Minimum temperature must be lower than Maximum temperature.'),
+          ),
+        );
+        return;
+      }
+
+      if (key == 'tempMax' && value <= _tempMin) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Maximum temperature must be greater than Minimum temperature.'),
+          ),
+        );
+        return;
+      }
+
+      await FirebaseService().saveThreshold(key, value);
+    } catch (_) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Minimum temperature must be lower than Maximum temperature.'),
-        ),
+        const SnackBar(content: Text('Failed to save setting.')),
       );
-      return;
     }
+  }
 
-    if (key == 'tempMax' && value <= _tempMin) {
+  Future<void> _saveNotifications(bool value) async {
+    try {
+      await FirebaseService().setNotificationsEnabled(value);
+    } catch (_) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Maximum temperature must be greater than Minimum temperature.'),
-        ),
+        const SnackBar(content: Text('Failed to save setting.')),
       );
-      return;
     }
-
-    await FirebaseService().saveThreshold(key, value);
-  } catch (_) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Failed to save setting.')),
-    );
   }
-}
-
-Future<void> _saveNotifications(bool value) async {
-  try {
-    await FirebaseService().setNotificationsEnabled(value);
-  } catch (_) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Failed to save setting.')),
-    );
-  }
-}
 
   @override
   Widget build(BuildContext context) {
@@ -132,7 +135,8 @@ Future<void> _saveNotifications(bool value) async {
       body: SafeArea(
         bottom: false,
         child: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: Colors.black54))
+            ? const Center(
+                child: CircularProgressIndicator(color: Colors.black54))
             : ListView(
                 physics: const BouncingScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
@@ -183,31 +187,31 @@ Future<void> _saveNotifications(bool value) async {
                   const SizedBox(height: 12),
 
                   _SliderCard(
-                  icon: Icons.thermostat_rounded,
-                  iconColor: Colors.red,
-                  title: 'Maximum Temperature',
-                  subtitle: 'Fan turns ON above this',
-                  value: _tempMax,
-                  min: 0.0,
-                  max: 50.0,
-                  unit: '°C',
-                  onChanged: (value) {
-                    setState(() {
-                      _tempMax = value;
-                    });
-                  },
-                  onChangeEnd: (value) async {
-                    if (_tempMax <= _tempMin) {
-                      _tempMax = _tempMin + 0.5;
-                      setState(() {});
-                    }
+                    icon: Icons.thermostat_rounded,
+                    iconColor: Colors.red,
+                    title: 'Maximum Temperature',
+                    subtitle: 'Fan turns ON above this',
+                    value: _tempMax,
+                    min: 0.0,
+                    max: 50.0,
+                    unit: '°C',
+                    onChanged: (value) {
+                      setState(() {
+                        _tempMax = value;
+                      });
+                    },
+                    onChangeEnd: (value) async {
+                      if (_tempMax <= _tempMin) {
+                        _tempMax = _tempMin + 0.5;
+                        setState(() {});
+                      }
 
-                    await _saveThreshold('tempMax', _tempMax);
-                  },
-                  cardColor: _card,
-                  iconBg: const Color(0xFFFFDADA),
-                  activeColor: _green,
-                ),
+                      await _saveThreshold('tempMax', _tempMax);
+                    },
+                    cardColor: _card,
+                    iconBg: const Color(0xFFFFDADA),
+                    activeColor: _green,
+                  ),
                   const SizedBox(height: 12),
 
                   // ── Humidity Limit ──────────────────────────
@@ -229,7 +233,6 @@ Future<void> _saveNotifications(bool value) async {
                   const SizedBox(height: 12),
 
                   // ── Feed Level Alert (relevant addition) ─────
-                  
                   _SliderCard(
                     cardColor: _card,
                     icon: Icons.grain_rounded,
@@ -242,12 +245,10 @@ Future<void> _saveNotifications(bool value) async {
                     min: 5,
                     max: 60,
                     activeColor: _green,
-                    onChanged: (v) =>
-                        setState(() => _feedAlertPercent = v),
+                    onChanged: (v) => setState(() => _feedAlertPercent = v),
                     onChangeEnd: (v) => _saveThreshold('feedLow', v),
                   ),
                   const SizedBox(height: 12),
-
                 ],
               ),
       ),

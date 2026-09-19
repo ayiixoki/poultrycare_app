@@ -35,6 +35,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   SensorData _cachedData = const SensorData();
   bool _cacheLoaded = false;
 
+  String get _greeting {
+  final hour = DateTime.now().hour;
+  if (hour < 12) return 'Good Morning';
+  if (hour < 18) return 'Good Afternoon';
+  return 'Good Evening';
+}
+
   String get _userName {
     final user = FirebaseAuth.instance.currentUser;
     if (user?.displayName != null && user!.displayName!.isNotEmpty) {
@@ -207,19 +214,30 @@ Widget build(BuildContext context) {
                               ),
                               const SizedBox(height: 12),
                               // Row 2: Feed Level & Water Level
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: _FeedLevelCard(
-                                      data: data,
-                                      feedLowPercent: feedLowPercent,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: _WaterLevelCard(data: data),
-                                  ),
-                                ],
+                              // Row 2: Feed Level & Water Level
+                              StreamBuilder<ActuatorState>(
+                                stream: FirebaseService().actuatorsStream(),
+                                builder: (context, actuatorSnap) {
+                                  final actuatorData = actuatorSnap.data ?? const ActuatorState();
+                                  return Row(
+                                    children: [
+                                      Expanded(
+                                        child: _FeedLevelCard(
+                                          data: data,
+                                          feedLowPercent: feedLowPercent,
+                                          isDispensing: actuatorData.feedServo,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: _WaterLevelCard(
+                                          data: data,
+                                          isDispensing: actuatorData.waterServo,
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
                               ),
                             ],
                           ),
@@ -279,9 +297,9 @@ Widget build(BuildContext context) {
 
           const SizedBox(height: 8),
 
-          const Text(
-            'Good Morning,\nFarmer!',
-            style: TextStyle(
+          Text(
+            '$_greeting,\n${_userName}!',
+            style: const TextStyle(
               fontSize: 30,
               height: 1.1,
               fontWeight: FontWeight.w800,
@@ -337,27 +355,6 @@ Widget build(BuildContext context) {
         ],
       ),
     );
-  }
-
-  // dispenseSeconds defaults to the user's saved Settings preference;
-  // pass an explicit value only if a caller needs to override it.
-  void _quickDispense(BuildContext context,
-      [int dispenseSeconds = AppConstants.quickDispenseSeconds]) async {
-    try {
-      await FirebaseService().quickDispense(dispenseSeconds);
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Dispensing feed for ${dispenseSeconds}s...'),
-          backgroundColor: const Color.fromARGB(255, 92, 252, 129),
-        ),
-      );
-    } catch (_) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to trigger dispense.')),
-      );
-    }
   }
 
 Color _tempColor(double t, double maxTemp, double minTemp) {
@@ -428,30 +425,83 @@ class _AlertBanner extends StatelessWidget {
 }
 
 // ── Feed Level Card ────────────────────────────────────────────
-class _FeedLevelCard extends StatelessWidget {
+class _FeedLevelCard extends StatefulWidget {
   final SensorData data;
   final double feedLowPercent;
-  // User-configurable target weight (grams) for the manual "Dispense
-  // Now" button, set on the Settings screen. The Pi runs the feed
-  // servo and polls the load cell until this weight is reached, then
-  // closes — a closed-loop dispense, not a fixed timer.
+  final bool isDispensing;
 
-const _FeedLevelCard({
-  required this.data,
-  required this.feedLowPercent,
-});
+  const _FeedLevelCard({
+    required this.data,
+    required this.feedLowPercent,
+    required this.isDispensing,
+  });
+
+  @override
+  State<_FeedLevelCard> createState() => _FeedLevelCardState();
+}
+
+class _FeedLevelCardState extends State<_FeedLevelCard> {
+  bool _localPending = false;
+
+Future<void> _handleDispense() async {
+  final controller = TextEditingController(
+    text: widget.feedLowPercent.toStringAsFixed(0),
+  );
+
+  final percent = await showDialog<double>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Dispense Feed'),
+      content: TextField(
+        controller: controller,
+        keyboardType: TextInputType.number,
+        autofocus: true,
+        decoration: const InputDecoration(suffixText: '%', labelText: 'Amount to dispense'),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        FilledButton(
+          onPressed: () {
+            final val = double.tryParse(controller.text.trim());
+            if (val != null) Navigator.pop(context, val.clamp(0, 100).toDouble());
+          },
+          child: const Text('Dispense'),
+        ),
+      ],
+    ),
+  );
+
+  if (percent == null) return; // user cancelled
+
+  setState(() => _localPending = true);
+  try {
+    await FirebaseService().saveThreshold('manualDispensePercent', percent);
+    await FirebaseService().triggerManualFeedFromSettings();
+  } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to trigger feed dispense.')),
+        );
+      }
+    }
+    // Leave _localPending true until the Pi's feedServo flag catches up,
+    // so the button doesn't flicker enabled between tap and Pi ack.
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _localPending = false);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Uses data.feedLevelPercent, which prefers the Pi-computed
-    // feed_percent field - same number the LCD displays.
+    final data = widget.data;
+    final feedLowPercent = widget.feedLowPercent;
+    final busy = widget.isDispensing || _localPending;
+
     final percentValue = (data.feedLevelPercent * 100).round();
-    
-    // Determine feed status based on percentage
     String feedStatus;
     Color statusBgColor;
     Color statusTextColor;
-    
+
     if (percentValue < feedLowPercent) {
       feedStatus = 'Low';
       statusBgColor = const Color(0xFFFFF3CD);
@@ -486,38 +536,30 @@ const _FeedLevelCard({
             children: [
               Icon(Icons.grain, color: Colors.orange, size: 24),
               SizedBox(width: 8),
-              Text(
-                'Feed Level',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
-                ),
-              ),
+              Text('Feed Level',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87)),
             ],
           ),
           const SizedBox(height: 12),
-          Text(
-            '$percentValue%',
-            style: const TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: Colors.black,
-            ),
-          ),
+          Text('$percentValue%',
+              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black)),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: statusBgColor,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              feedStatus,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: statusTextColor,
+            decoration: BoxDecoration(color: statusBgColor, borderRadius: BorderRadius.circular(6)),
+            child: Text(feedStatus,
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: statusTextColor)),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: busy ? null : _handleDispense,
+              child: Text(busy ? 'Dispensing…' : 'Dispense Now'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Color(0xFFD4C84E),
+                foregroundColor: const Color.fromARGB(255, 0, 0, 0),
+                padding: const EdgeInsets.symmetric(vertical: 10),
               ),
             ),
           ),
@@ -528,45 +570,82 @@ const _FeedLevelCard({
 }
 
 // ── Water Level Card ───────────────────────────────────────────
-class _WaterLevelCard extends StatelessWidget {
+class _WaterLevelCard extends StatefulWidget {
   final SensorData data;
+  final bool isDispensing;
 
-  const _WaterLevelCard({
-    required this.data,
-  });
+  const _WaterLevelCard({required this.data, required this.isDispensing});
+
+  @override
+  State<_WaterLevelCard> createState() => _WaterLevelCardState();
+}
+
+class _WaterLevelCardState extends State<_WaterLevelCard> {
+  bool _localPending = false;
+
+  Future<void> _handleDispense() async {
+    setState(() => _localPending = true);
+    try {
+      await FirebaseService().triggerManualWater();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Dispensing water until level reaches Normal…')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to trigger water dispense.')),
+        );
+      }
+    }
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _localPending = false);
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _WaterLevelCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Fires only on the real Pi-confirmed transition: was dispensing,
+    // now stopped, because the sensor reported water level back to Normal.
+    if (oldWidget.isDispensing && !widget.isDispensing) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Water level normal — dispensing stopped.')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Map water level string to percentage and status
-    // Hardware only supports two real states: "low" and "normal"
+    final data = widget.data;
+    final busy = widget.isDispensing || _localPending;
+
     String waterStatus;
-Color statusBgColor;
-Color statusTextColor;
+    Color statusBgColor;
+    Color statusTextColor;
 
-switch (data.waterLevel.toLowerCase()) {
-  case 'normal':
-    waterStatus = 'Normal';
-    statusBgColor = const Color(0xFFD4EDDA);
-    statusTextColor = const Color(0xFF28A745);
-    break;
-
-  case 'low':
-    waterStatus = 'Low';
-    statusBgColor = const Color(0xFFFFF3CD);
-    statusTextColor = const Color(0xFF856404);
-    break;
-
-  case 'empty':
-    waterStatus = 'Empty';
-    statusBgColor = const Color(0xFFF8D7DA);
-    statusTextColor = const Color(0xFFDC3545);
-    break;
-
-  default:
-    waterStatus = 'Unknown';
-    statusBgColor = const Color(0xFFE2E3E5);
-    statusTextColor = const Color(0xFF6C757D);
-}
+    switch (data.waterLevel.toLowerCase()) {
+      case 'normal':
+        waterStatus = 'Normal';
+        statusBgColor = const Color(0xFFD4EDDA);
+        statusTextColor = const Color(0xFF28A745);
+        break;
+      case 'low':
+        waterStatus = 'Low';
+        statusBgColor = const Color(0xFFFFF3CD);
+        statusTextColor = const Color(0xFF856404);
+        break;
+      case 'empty':
+        waterStatus = 'Empty';
+        statusBgColor = const Color(0xFFF8D7DA);
+        statusTextColor = const Color(0xFFDC3545);
+        break;
+      default:
+        waterStatus = 'Unknown';
+        statusBgColor = const Color(0xFFE2E3E5);
+        statusTextColor = const Color(0xFF6C757D);
+    }
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -574,11 +653,7 @@ switch (data.waterLevel.toLowerCase()) {
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
+          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2)),
         ],
       ),
       child: Column(
@@ -588,38 +663,30 @@ switch (data.waterLevel.toLowerCase()) {
             children: [
               Icon(Icons.water_drop, color: Colors.blue, size: 24),
               SizedBox(width: 8),
-              Text(
-                'Water Level',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
-                ),
-              ),
+              Text('Water Level',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87)),
             ],
           ),
           const SizedBox(height: 12),
-          Text(
-            waterStatus,
-            style: const TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: Colors.black,
-            ),
-          ),
+          Text(waterStatus,
+              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black)),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: statusBgColor,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              waterStatus,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: statusTextColor,
+            decoration: BoxDecoration(color: statusBgColor, borderRadius: BorderRadius.circular(6)),
+            child: Text(waterStatus,
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: statusTextColor)),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: busy ? null : _handleDispense,
+              child: Text(busy ? 'Dispensing…' : 'Dispense Now'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Color(0xFFD4C84E),
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(vertical: 10),
               ),
             ),
           ),

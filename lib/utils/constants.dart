@@ -65,11 +65,17 @@ class AppConstants {
   /// Maximum safe temperature inside the poultry house (°C).
   static const double defaultMaxTemp = 35.0;
 
+  static const double defaultHumMax = 70.0; // matches config.HUM_MAX on the Pi
+  
+  static const double humCriticalBuffer = 10.0; // matches config.HUM_CRITICAL_BUFFER on the Pi
+
   /// Feed level percentage below which a "Low Feed" warning is shown.
   static const double lowFeedThreshold = 0.30; // 30 %
 
   /// Maximum feed hopper capacity in kilograms.
   static const double feedHopperCapacity = 5.0;
+
+  static const int defaultManualDispenseGrams = 100; //config.DEFAULT_MANUAL_DISPENSE_GRAMS on the Pi
 
   // ── Dispense Durations ────────────────────────────────────────────────────
   /// How long (seconds) the feeder motor runs per "Quick Dispense" tap.
