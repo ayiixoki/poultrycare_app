@@ -117,10 +117,11 @@ Stream<bool> connectionStream() {
   // The Arduino listens to these paths and reacts accordingly.
   // ==========================================================================
 
-  Future<void> triggerManualFeed({int grams = AppConstants.defaultManualDispenseGrams}) async {
+  Future<void> triggerManualFeed({int grams = AppConstants.defaultManualDispenseGrams, double? percent}) async {
     await FirebaseDatabase.instance.ref('sensor_data').update({
       'feeder_active': true,
       'manual_dispense_grams': grams,
+      if (percent != null) 'manual_dispense_percent': percent,
     });
   }
   /// Triggers a manual feed dispense sized from the user's saved
@@ -136,26 +137,18 @@ Future<void> triggerManualFeedFromSettings() async {
 
   try {
     final thresholdSnap = await _thresholdsRef.get();
-    final sensorSnap = await _sensorRef.get();
-
-    double? percent;
+    
     if (thresholdSnap.exists) {
       final thresholds = Map<String, dynamic>.from(thresholdSnap.value as Map);
-      percent = (thresholds['manualDispensePercent'] as num?)?.toDouble();
-    }
-
-    if (percent != null && sensorSnap.exists) {
-      final sensor = Map<String, dynamic>.from(sensorSnap.value as Map);
-      final feedWeight = (sensor['feed_weight'] as num?)?.toDouble();
-      final feedPercent = (sensor['feed_percent'] as num?)?.toDouble();
-
-      if (feedWeight != null && feedPercent != null && feedPercent > 0) {
-        final capacityGrams = feedWeight / (feedPercent / 100);
-        grams = (capacityGrams * (percent / 100)).round();
+      final percent = (thresholds['manualDispensePercent'] as num?)?.toDouble();
+      final capacity = (thresholds['feedCapacityGrams'] as num?)?.toDouble()
+          ?? FeedingSchedule.fullFeedingGrams.toDouble();
+      if (percent != null) {
+        grams = FeedingSchedule.gramsFromPercent(percent, targetGrams: capacity.round());
       }
     }
   } catch (_) {
-    // Fall back to the hardcoded default rather than blocking the dispense.
+    // Fall back to the default rather than blocking the dispense.
   }
 
   await triggerManualFeed(grams: grams);
@@ -215,9 +208,10 @@ Future<void> triggerManualFeedFromSettings() async {
 
     /// Triggers a manual feed dispense of a specific gram amount.
   Future<void> quickDispenseGrams(double grams) async {
-    await _sensorRef.child(AppConstants.dbFeederActive).set(true);
-    await _sensorRef.child('manual_dispense_grams').set(grams);
-
+    await _sensorRef.update({
+      'feeder_active': true,
+      'manual_dispense_grams': grams,
+    });
     await addLog(ActivityLog(
       id: '',
       type: LogType.feeding,
@@ -229,7 +223,9 @@ Future<void> triggerManualFeedFromSettings() async {
 
   /// Sets the water dispenser valve ON or OFF.
   Future<void> setWaterDispenser(bool isOn) async {
-    await _sensorRef.child(AppConstants.dbWaterActive).set(isOn);
+    await _sensorRef.update({
+      'water_active': isOn,
+    });
     await addLog(ActivityLog(
       id: '',
       type: LogType.water,

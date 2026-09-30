@@ -11,7 +11,8 @@ String _roundDecimals(String text) {
   final regex = RegExp(r'\d+\.\d+');
   return text.replaceAllMapped(regex, (match) {
     final value = double.parse(match.group(0)!);
-    return value.round().toString();
+    final s = value.toStringAsFixed(1);
+    return s.endsWith('.0') ? s.substring(0, s.length - 2) : s;
   });
 }
 

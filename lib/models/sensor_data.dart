@@ -39,6 +39,8 @@ class SensorData {
   /// Whether the Pi is connected to Firebase.
   final bool systemOnline;
 
+  final bool feedLowActive;
+
   /// Unix timestamp (ms) of the last completed feeding dispense.
   final int lastFeedTime;
 
@@ -52,6 +54,7 @@ class SensorData {
     this.feederActive = false,
     this.waterActive = false,
     this.systemOnline = false,
+    this.feedLowActive = false,
     this.lastFeedTime = 0,
   });
 
@@ -81,6 +84,7 @@ class SensorData {
       feederActive: map['feeder_active'] as bool? ?? false,
       waterActive: map['water_dispenser'] as bool? ?? false,
       systemOnline: map['system_online'] as bool? ?? false,
+      feedLowActive: map['feed_low_active'] as bool? ?? false,
       lastFeedTime: (map['last_feed_time'] as num?)?.toInt() ?? 0,
     );
   }
@@ -97,6 +101,7 @@ class SensorData {
       'feeder_active': feederActive,
       'water_dispenser': waterActive,
       'system_online': systemOnline,
+      'feed_low_active': feedLowActive,
       'last_feed_time': lastFeedTime,
     };
   }
@@ -114,6 +119,7 @@ class SensorData {
     bool? feederActive,
     bool? waterActive,
     bool? systemOnline,
+    bool? feedLowActive,
     int? lastFeedTime,
   }) {
     return SensorData(
@@ -126,6 +132,7 @@ class SensorData {
       feederActive: feederActive ?? this.feederActive,
       waterActive: waterActive ?? this.waterActive,
       systemOnline: systemOnline ?? this.systemOnline,
+      feedLowActive: feedLowActive ?? this.feedLowActive,
       lastFeedTime: lastFeedTime ?? this.lastFeedTime,
     );
   }

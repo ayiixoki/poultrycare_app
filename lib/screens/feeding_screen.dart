@@ -225,7 +225,7 @@ class _ScheduleTile extends StatelessWidget {
   // of arbitrary grams thresholds - so it stays correct even if the
   // per-feeding target on the Pi ever changes.
   String _getPortionLabel(FeedingSchedule schedule) {
-    final percent = schedule.percentOf();
+    final percent = schedule.percent ?? schedule.percentOf();
     return '$percent% Portion';
   }
 
@@ -351,6 +351,7 @@ class _ScheduleFormDialogState extends State<_ScheduleFormDialog> {
   late TimeOfDay _selectedTime;
   late int _selectedPercent;
   late List<String> _selectedDays;
+  double _feedCapacity = FeedingSchedule.fullFeedingGrams.toDouble();
   bool _isSaving = false;
 
   @override
@@ -364,18 +365,40 @@ class _ScheduleFormDialogState extends State<_ScheduleFormDialog> {
         hour: int.tryParse(parts[0]) ?? 6,
         minute: int.tryParse(parts[1]) ?? 0,
       );
-      // Snap to the closest of the 4 options in case the stored amount
-      // doesn't land exactly on 25/50/75/100 (e.g. an older grams-based
-      // schedule saved before this change).
-      final existingPercent = s.percentOf();
-      _selectedPercent = _percentOptions.reduce(
-        (a, b) => (existingPercent - a).abs() < (existingPercent - b).abs() ? a : b,
-      );
+      if (s.percent != null) {
+        // New-style schedule — percent was stored directly, no guessing needed.
+        _selectedPercent = _percentOptions.contains(s.percent)
+            ? s.percent!
+            : _percentOptions.reduce(
+                (a, b) => (s.percent! - a).abs() < (s.percent! - b).abs() ? a : b);
+      } else {
+        // Older schedule saved before percent was stored — approximate it
+        // from the frozen amountGrams (best effort, may be slightly off
+        // if capacity has changed since it was saved).
+        final existingPercent = s.percentOf();
+        _selectedPercent = _percentOptions.reduce(
+          (a, b) => (existingPercent - a).abs() < (existingPercent - b).abs() ? a : b,
+        );
+      }
       _selectedDays = List.from(s.days);
     } else {
       _selectedTime = const TimeOfDay(hour: 6, minute: 0);
       _selectedPercent = 100;
       _selectedDays = List.from(AppConstants.weekDays);
+    }
+
+    _loadFeedCapacity();
+  }
+
+  Future<void> _loadFeedCapacity() async {
+    try {
+      final thresholds = await FirebaseService().getThresholds();
+      final capacity = (thresholds['feedCapacityGrams'] as num?)?.toDouble();
+      if (capacity != null && mounted) {
+        setState(() => _feedCapacity = capacity);
+      }
+    } catch (_) {
+      // keep the default if this fails — non-fatal
     }
   }
 
@@ -390,7 +413,10 @@ class _ScheduleFormDialogState extends State<_ScheduleFormDialog> {
   }
 
   Future<void> _save() async {
-    final grams = FeedingSchedule.gramsFromPercent(_selectedPercent);
+    final grams = FeedingSchedule.gramsFromPercent(
+      _selectedPercent,
+      targetGrams: _feedCapacity.round(),
+    );
 
     if (_selectedDays.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -409,6 +435,7 @@ class _ScheduleFormDialogState extends State<_ScheduleFormDialog> {
       label: widget.existing?.label ?? 'Feeding',
       time: timeString,
       amountGrams: grams,
+      percent: _selectedPercent,
       enabled: widget.existing?.enabled ?? true,
       days: List.from(_selectedDays),
     );
@@ -563,7 +590,7 @@ class _ScheduleFormDialogState extends State<_ScheduleFormDialog> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '≈ ${FeedingSchedule.gramsFromPercent(_selectedPercent)}g',
+                  '≈ ${FeedingSchedule.gramsFromPercent(_selectedPercent, targetGrams: _feedCapacity.round())}g',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.7),
                     fontSize: 12,

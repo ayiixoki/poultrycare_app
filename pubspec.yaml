@@ -18,7 +18,7 @@ dependencies:
     sdk: flutter
 
   # ── Firebase Core (required for ALL Firebase features) ──────────────────────
-  firebase_core: ^2.27.0
+  firebase_core: ^2.32.0
 
   # ── Firebase Auth (for login/logout) ───────────────────────────────────────
   firebase_auth: ^4.17.8

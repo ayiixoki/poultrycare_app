@@ -20,6 +20,8 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import '../services/cache_service.dart';
 
 
+// Add near the top of the file (or in app_colors.dart, and reference it everywhere):
+const Color kStatusGreen = Color(0xFF28A745);
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -122,7 +124,7 @@ Widget build(BuildContext context) {
           final hasCriticalAlert = data.systemOnline && (
             data.temperature > maxTemp ||
             data.waterLevel == 'EMPTY' ||
-            data.feedLevelPercent < (feedLowPercent / 100)
+            data.feedLowActive      
           );
 
           String alertMessage = '';
@@ -131,7 +133,7 @@ Widget build(BuildContext context) {
           } else if (data.temperature > maxTemp) {
             alertMessage =
                 'Temperature Critical! Reached ${data.temperature.toStringAsFixed(1)}°C';
-          } else if (data.feedLevelPercent < (feedLowPercent / 100)) {
+          } else if (data.feedLowActive) {   // was: data.feedLevelPercent < (feedLowPercent / 100)
             alertMessage = 'Feed Running Low! Refill needed soon.';
           }
 
@@ -360,25 +362,25 @@ Widget build(BuildContext context) {
 Color _tempColor(double t, double maxTemp, double minTemp) {
   if (t > maxTemp) return const Color(0xFFFF6B6B);
   if (t < minTemp) return AppColors.info;
-  return AppColors.success;
+  return kStatusGreen;
 }
 
 String _tempStatus(double t, double maxTemp, double minTemp) {
-  if (t > maxTemp) return 'Too Hot';
-  if (t < minTemp) return 'Too Cold';
+  if (t > maxTemp) return 'High';
+  if (t < minTemp) return 'Low';
   return 'Normal';
 }
 
 String _humStatus(double h, double humMax, double humMin) {
   if (h > humMax) return 'High';
   if (h < humMin) return 'Low';
-  return 'Good';
+  return 'Normal';
 }
 
 Color _humColor(double h, double humMax, double humMin) {
   if (h > humMax) return const Color(0xFFFF6B6B);
   if (h < humMin) return const Color(0xFFFFA500);
-  return AppColors.success;
+  return kStatusGreen;
 }
 }
 
@@ -444,9 +446,7 @@ class _FeedLevelCardState extends State<_FeedLevelCard> {
   bool _localPending = false;
 
 Future<void> _handleDispense() async {
-  final controller = TextEditingController(
-    text: widget.feedLowPercent.toStringAsFixed(0),
-  );
+  final controller = TextEditingController(text: '100');
 
   final percent = await showDialog<double>(
     context: context,
@@ -463,7 +463,7 @@ Future<void> _handleDispense() async {
         FilledButton(
           onPressed: () {
             final val = double.tryParse(controller.text.trim());
-            if (val != null) Navigator.pop(context, val.clamp(0, 100).toDouble());
+            if (val != null && val > 0) Navigator.pop(context, val.clamp(0, 100).toDouble());
           },
           child: const Text('Dispense'),
         ),
@@ -471,25 +471,23 @@ Future<void> _handleDispense() async {
     ),
   );
 
-  if (percent == null) return; // user cancelled
+  if (percent == null) return;
 
   setState(() => _localPending = true);
   try {
     await FirebaseService().saveThreshold('manualDispensePercent', percent);
     await FirebaseService().triggerManualFeedFromSettings();
   } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to trigger feed dispense.')),
-        );
-      }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to trigger feed dispense.')),
+      );
     }
-    // Leave _localPending true until the Pi's feedServo flag catches up,
-    // so the button doesn't flicker enabled between tap and Pi ack.
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) setState(() => _localPending = false);
-    });
   }
+  Future.delayed(const Duration(seconds: 2), () {
+    if (mounted) setState(() => _localPending = false);
+  });
+}
 
   @override
   Widget build(BuildContext context) {
@@ -502,14 +500,14 @@ Future<void> _handleDispense() async {
     Color statusBgColor;
     Color statusTextColor;
 
-    if (percentValue < feedLowPercent) {
+    if (data.feedLowActive) {              // was: percentValue < feedLowPercent
       feedStatus = 'Low';
       statusBgColor = const Color(0xFFFFF3CD);
       statusTextColor = const Color(0xFF856404);
-    } else if (percentValue >= feedLowPercent && percentValue <= 70) {
+    } else if (percentValue <= 95) {       // was: percentValue >= feedLowPercent && percentValue <= 70
       feedStatus = 'Normal';
       statusBgColor = const Color(0xFFD4EDDA);
-      statusTextColor = const Color(0xFF28A745);
+      statusTextColor = kStatusGreen;
     } else {
       feedStatus = 'Full';
       statusBgColor = const Color(0xFFD1ECFF);
@@ -583,26 +581,33 @@ class _WaterLevelCard extends StatefulWidget {
 class _WaterLevelCardState extends State<_WaterLevelCard> {
   bool _localPending = false;
 
-  Future<void> _handleDispense() async {
-    setState(() => _localPending = true);
-    try {
-      await FirebaseService().triggerManualWater();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Dispensing water until level reaches Normal…')),
-        );
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to trigger water dispense.')),
-        );
-      }
-    }
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) setState(() => _localPending = false);
-    });
+Future<void> _handleDispense() async {
+  if (widget.data.waterLevel.toLowerCase() == 'normal') {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Water level normal, skipping dispense.')),
+    );
+    return;
   }
+
+  setState(() => _localPending = true);
+  try {
+    await FirebaseService().triggerManualWater();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Dispensing water until level reaches Normal…')),
+      );
+    }
+  } catch (_) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to trigger water dispense.')),
+      );
+    }
+  }
+  Future.delayed(const Duration(seconds: 2), () {
+    if (mounted) setState(() => _localPending = false);
+  });
+}
 
   @override
   void didUpdateWidget(covariant _WaterLevelCard oldWidget) {
@@ -629,7 +634,7 @@ class _WaterLevelCardState extends State<_WaterLevelCard> {
       case 'normal':
         waterStatus = 'Normal';
         statusBgColor = const Color(0xFFD4EDDA);
-        statusTextColor = const Color(0xFF28A745);
+        statusTextColor = kStatusGreen;
         break;
       case 'low':
         waterStatus = 'Low';

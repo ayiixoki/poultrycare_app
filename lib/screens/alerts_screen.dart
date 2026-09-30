@@ -169,7 +169,7 @@ class ClimateScreen extends StatelessWidget {
         type: 'temperature',
         title: 'Temperature High',
         description:
-            'Currently ${data.temperature.toStringAsFixed(1)}°C — cooling fan is ON.',
+            'Currently ${data.temperature.toStringAsFixed(1)}°C — Exhaust fan is ON.',
         icon: Icons.thermostat,
         backgroundColor: const Color(0xFFFFEAEA),
         iconColor: const Color(0xFFFF6B6B),
@@ -208,7 +208,7 @@ class ClimateScreen extends StatelessWidget {
     }
 
     final feedPercent = (data.feedLevelPercent * 100);
-    if (feedPercent < feedLowPercent) {
+    if (data.feedLowActive) {
       alerts.add(Alert(
         type: 'feed',
         title: 'Feed Level Low',
