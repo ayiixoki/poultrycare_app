@@ -10,6 +10,7 @@
 // ============================================================
 
 import 'package:flutter/material.dart';
+import 'package:firebase_database/firebase_database.dart';
 import '../models/sensor_data.dart';
 import '../services/firebase_service.dart';
 import '../utils/constants.dart';
@@ -34,8 +35,21 @@ class ClimateScreen extends StatelessWidget {
           builder: (context, sensorSnap) {
             final data = sensorSnap.data ?? const SensorData();
 
+            // Component health written by main.py (same data as the LCD "System Check")
+            return StreamBuilder<DatabaseEvent>(
+              stream: FirebaseDatabase.instance.ref('sensor_data').onValue,
+              builder: (context, healthSnap) {
+            final raw = healthSnap.data?.snapshot.value;
+            final root = raw is Map
+                ? Map<String, dynamic>.from(raw)
+                : <String, dynamic>{};
+            final healthRaw = root['sensor_health'];
+            final health = healthRaw is Map
+                ? Map<String, dynamic>.from(healthRaw)
+                : <String, dynamic>{};
+
             final activeAlerts = _activeAlerts(
-              data, maxTemp, minTemp, humMax, humMin, feedLowPercent,
+              data, maxTemp, minTemp, humMax, humMin, feedLowPercent, health, root,
             );
 
             return Container(
@@ -144,6 +158,8 @@ class ClimateScreen extends StatelessWidget {
                 ],
               ),
             );
+              },
+            );
           },
         );
       },
@@ -160,9 +176,88 @@ class ClimateScreen extends StatelessWidget {
     double humMax,
     double humMin,
     double feedLowPercent,
+    Map<String, dynamic> health,
+    Map<String, dynamic> root,
   ) {
     if (!data.systemOnline) return [];
     final alerts = <Alert>[];
+
+    // ── Feed container (ultrasonic sensor) ──
+    String fault(String key, String normal) {
+      final reasons = root['sensor_fault_reason'];
+      final stuck = reasons is Map && reasons[key] == 'stuck';
+      return stuck
+          ? 'It keeps showing the same reading for a long time and may be stuck or broken. Please check it.'
+          : normal;
+    }
+
+    // ── Feed container (ultrasonic sensor) ──
+    if (health['feed_bin'] == false) {
+      alerts.add(Alert(
+        type: 'component',
+        title: 'Feed Container Sensor Problem',
+        description: fault('feed_bin',
+            'The feed container sensor is not working. Please check its cable.'),
+        icon: Icons.sensors_off,
+        backgroundColor: const Color(0xFFF8D7DA),
+        iconColor: const Color(0xFFDC3545),
+      ));
+    } else if (root['feed_bin_state'] == 'empty') {
+      alerts.add(Alert(
+        type: 'feedBin',
+        title: 'Feed Container Empty',
+        description: 'The feed container is empty. Please refill it now.',
+        icon: Icons.inventory_2,
+        backgroundColor: const Color(0xFFF8D7DA),
+        iconColor: const Color(0xFFDC3545),
+      ));
+    } else if (root['feed_bin_low_active'] == true) {
+      final pct = (root['feed_bin_percent'] as num?)?.toDouble();
+      alerts.add(Alert(
+        type: 'feedBin',
+        title: 'Feed Container Low',
+        description: pct != null
+            ? 'Only ${pct.toStringAsFixed(0)}% feed left in the container. Please refill.'
+            : 'The feed container is running low. Please refill.',
+        icon: Icons.inventory_2,
+        backgroundColor: const Color(0xFFFFF3CD),
+        iconColor: const Color(0xFFFFA500),
+      ));
+    }
+
+    // ── Parts that stopped working ──
+    if (health['dht22'] == false) {
+      alerts.add(Alert(
+        type: 'component',
+        title: 'Temperature/Humidity Sensor Problem',
+        description: fault('dht22',
+            'The temperature and humidity sensor is not working. Please check its cable.'),
+        icon: Icons.sensors_off,
+        backgroundColor: const Color(0xFFF8D7DA),
+        iconColor: const Color(0xFFDC3545),
+      ));
+    }
+    if (health['load_cell'] == false) {
+      alerts.add(Alert(
+        type: 'component',
+        title: 'Feed Scale Problem',
+        description: fault('load_cell',
+            'The feed scale is not working. Please check its cable.'),
+        icon: Icons.scale,
+        backgroundColor: const Color(0xFFF8D7DA),
+        iconColor: const Color(0xFFDC3545),
+      ));
+    }
+    if (health['water_refill'] == false) {
+      alerts.add(Alert(
+        type: 'component',
+        title: 'Water Refill Failed',
+        description: 'Drinker is still low after refilling. Check the valve and float sensor.',
+        icon: Icons.water_drop,
+        backgroundColor: const Color(0xFFF8D7DA),
+        iconColor: const Color(0xFFDC3545),
+      ));
+    }
 
     if (data.temperature > maxTemp) {
       alerts.add(Alert(
@@ -218,28 +313,16 @@ class ClimateScreen extends StatelessWidget {
         iconColor: const Color(0xFFFFA500),
       ));
     }
-
-    switch (data.waterLevel.toLowerCase()) {
-      case 'empty':
-        alerts.add(Alert(
-          type: 'water',
-          title: 'Water Container Empty',
-          description: 'Refill required immediately.',
-          icon: Icons.water_drop,
-          backgroundColor: const Color(0xFFF8D7DA),
-          iconColor: const Color(0xFFDC3545),
-        ));
-        break;
-      case 'low':
-        alerts.add(Alert(
-          type: 'water',
-          title: 'Water Level Low',
-          description: 'Water is running low. Please refill soon.',
-          icon: Icons.water_drop,
-          backgroundColor: const Color(0xFFFFF3CD),
-          iconColor: const Color(0xFFFFA500),
-        ));
-        break;
+        // Trough refills itself on the Pi, so only the container needs a human.
+    if (data.containerLevel.toLowerCase() == 'empty') {
+      alerts.add(Alert(
+        type: 'water',
+        title: 'Water Container Empty',
+        description: 'Refill the water container. Cannot auto-refill without water.',
+        icon: Icons.water_drop,
+        backgroundColor: const Color(0xFFF8D7DA),
+        iconColor: const Color(0xFFDC3545),
+      ));
     }
 
     return alerts;

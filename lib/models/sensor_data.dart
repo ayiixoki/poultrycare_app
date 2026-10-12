@@ -30,19 +30,29 @@ class SensorData {
   /// Water level status: "FULL", "LOW", or "EMPTY".
   final String waterLevel;
 
+  /// Water container status from the Pi's 2nd float sensor: "ok" or "empty".
+  final String containerLevel;
+  final bool containerEmptyActive;
+
   /// Whether the feeder motor is actively dispensing feed right now.
   final bool feederActive;
 
   /// Whether the water dispenser valve is currently open.
   final bool waterActive;
 
-  /// Whether the Pi is connected to Firebase.
+  /// Whether the Pi is currently online. NOTE: this is NOT read from the
+  /// Pi's 'system_online' flag (a Pi that lost WiFi can't set it to false).
+  /// FirebaseService.sensorStream() computes it from [lastUpdated] going stale.
   final bool systemOnline;
 
   final bool feedLowActive;
 
   /// Unix timestamp (ms) of the last completed feeding dispense.
   final int lastFeedTime;
+
+  /// Unix timestamp (ms) of the Pi's most recent sensor push. Stops
+  /// changing when the Pi goes offline - used to detect that.
+  final int lastUpdated;
 
   const SensorData({
     this.temperature = 0.0,
@@ -56,6 +66,9 @@ class SensorData {
     this.systemOnline = false,
     this.feedLowActive = false,
     this.lastFeedTime = 0,
+    this.lastUpdated = 0,
+    this.containerLevel = 'unknown',
+    this.containerEmptyActive = false,
   });
 
   // ── Feed Level as a fraction (0.0 to 1.0), for widgets that need it ──────
@@ -86,6 +99,9 @@ class SensorData {
       systemOnline: map['system_online'] as bool? ?? false,
       feedLowActive: map['feed_low_active'] as bool? ?? false,
       lastFeedTime: (map['last_feed_time'] as num?)?.toInt() ?? 0,
+      lastUpdated: (map['last_updated'] as num?)?.toInt() ?? 0,
+      containerLevel: map['container_level'] as String? ?? 'unknown',
+      containerEmptyActive: map['container_empty_active'] as bool? ?? false,
     );
   }
 
@@ -103,6 +119,9 @@ class SensorData {
       'system_online': systemOnline,
       'feed_low_active': feedLowActive,
       'last_feed_time': lastFeedTime,
+      'last_updated': lastUpdated,
+      'container_level': containerLevel,
+      'container_empty_active': containerEmptyActive,
     };
   }
 
@@ -121,6 +140,9 @@ class SensorData {
     bool? systemOnline,
     bool? feedLowActive,
     int? lastFeedTime,
+    int? lastUpdated,
+    String? containerLevel,
+    bool? containerEmptyActive,
   }) {
     return SensorData(
       temperature: temperature ?? this.temperature,
@@ -134,6 +156,9 @@ class SensorData {
       systemOnline: systemOnline ?? this.systemOnline,
       feedLowActive: feedLowActive ?? this.feedLowActive,
       lastFeedTime: lastFeedTime ?? this.lastFeedTime,
+      lastUpdated: lastUpdated ?? this.lastUpdated,
+      containerLevel: containerLevel ?? this.containerLevel,
+      containerEmptyActive: containerEmptyActive ?? this.containerEmptyActive,
     );
   }
 }

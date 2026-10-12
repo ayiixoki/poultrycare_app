@@ -1,27 +1,31 @@
 // ============================================================
-// lib/screens/dashboard_screen.dart  — REDESIGNED (Reference UI)
+// lib/screens/dashboard_screen.dart
 // ============================================================
-// Features: greeting with user name, critical alert banner,
-// 2x2 sensor cards grid (feed, water, temp, humidity),
-// environmental control status, device states.
+// Greeting header, critical alert banner, sensor cards
+// (temperature, humidity, feed, water + container), and the
+// environmental control status.
+//
+// Water: the trough is refilled automatically by the Pi, so the
+// water card has no button. It shows the trough level, a
+// "Refilling" state while the Pi's water servo is open, and the
+// water CONTAINER status (ok / empty).
 // ============================================================
 
+import 'dart:async';
+
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../models/sensor_data.dart';
 import '../models/actuator_state.dart';
+import '../models/sensor_data.dart';
+import '../services/cache_service.dart';
 import '../services/firebase_service.dart';
 import '../utils/app_colors.dart';
 import '../utils/constants.dart';
-import '../widgets/feed_level_bar.dart';
-import 'settings_screen.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
-import '../services/cache_service.dart';
 
-
-// Add near the top of the file (or in app_colors.dart, and reference it everywhere):
 const Color kStatusGreen = Color(0xFF28A745);
+
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -30,19 +34,19 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-
   bool _hasInternet = true;
   final Connectivity _connectivity = Connectivity();
+  StreamSubscription<List<ConnectivityResult>>? _connSub;
 
   SensorData _cachedData = const SensorData();
   bool _cacheLoaded = false;
 
   String get _greeting {
-  final hour = DateTime.now().hour;
-  if (hour < 12) return 'Good Morning';
-  if (hour < 18) return 'Good Afternoon';
-  return 'Good Evening';
-}
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Good Morning';
+    if (hour < 18) return 'Good Afternoon';
+    return 'Good Evening';
+  }
 
   String get _userName {
     final user = FirebaseAuth.instance.currentUser;
@@ -52,227 +56,249 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final email = user?.email ?? 'Farmer';
     return email.split('@').first;
   }
-@override
-void initState() {
-  super.initState();
 
-  _loadCache();
-  _checkInternet();
+  @override
+  void initState() {
+    super.initState();
+    _loadCache();
+    _checkInternet();
 
-  _connectivity.onConnectivityChanged.listen((results) {
-    if (!mounted) return;
-
-    setState(() {
-      _hasInternet = results.isNotEmpty &&
-          !results.contains(ConnectivityResult.none);
-    });
-  });
-}
-
-Future<void> _checkInternet() async {
-  final result = await _connectivity.checkConnectivity();
-
-  if (!mounted) return;
-
-  setState(() {
-    _hasInternet =
-        result.isNotEmpty && !result.contains(ConnectivityResult.none);
-  });
-}
-
-Future<void> _loadCache() async {
-  final data = await CacheService.load();
-
-  if (!mounted) return;
-
-  if (data != null) {
-    setState(() {
-      _cachedData = data;
-      _cacheLoaded = true;
+    _connSub = _connectivity.onConnectivityChanged.listen((results) {
+      if (!mounted) return;
+      setState(() {
+        _hasInternet =
+            results.isNotEmpty && !results.contains(ConnectivityResult.none);
+      });
     });
   }
-}
 
-@override
-Widget build(BuildContext context) {
-  return StreamBuilder<Map<String, dynamic>>(
-    stream: FirebaseService().thresholdsStream(),
-    builder: (context, threshSnap) {
-      final thresholds = threshSnap.data ?? {};
-      final maxTemp = (thresholds['tempMax'] as num?)?.toDouble() ?? AppConstants.defaultMaxTemp;
-      final minTemp = (thresholds['tempMin'] as num?)?.toDouble() ?? AppConstants.defaultMinTemp;
-      final feedLowPercent = (thresholds['feedLow'] as num?)?.toDouble() ?? 30.0;
-      final humMax = (thresholds['humMax'] as num?)?.toDouble() ?? 80.0;
-      final humMin = 50.0;
+  @override
+  void dispose() {
+    _connSub?.cancel();
+    super.dispose();
+  }
 
-      return StreamBuilder<SensorData>(
-        stream: FirebaseService().sensorStream(),
-        builder: (context, snapshot) {
-          final data = snapshot.hasData
-              ? snapshot.data!
-              : _cachedData;
-          if (snapshot.hasData) {
+  Future<void> _checkInternet() async {
+    final result = await _connectivity.checkConnectivity();
+    if (!mounted) return;
+    setState(() {
+      _hasInternet =
+          result.isNotEmpty && !result.contains(ConnectivityResult.none);
+    });
+  }
+
+  Future<void> _loadCache() async {
+    final data = await CacheService.load();
+    if (!mounted) return;
+    if (data != null) {
+      setState(() {
+        _cachedData = data;
+        _cacheLoaded = true;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<Map<String, dynamic>>(
+      stream: FirebaseService().thresholdsStream(),
+      builder: (context, threshSnap) {
+        final thresholds = threshSnap.data ?? {};
+        final maxTemp = (thresholds['tempMax'] as num?)?.toDouble() ??
+            AppConstants.defaultMaxTemp;
+        final minTemp = (thresholds['tempMin'] as num?)?.toDouble() ??
+            AppConstants.defaultMinTemp;
+        final humMax = (thresholds['humMax'] as num?)?.toDouble() ?? 80.0;
+        const humMin = 50.0;
+
+        return StreamBuilder<SensorData>(
+          stream: FirebaseService().sensorStream(),
+          builder: (context, snapshot) {
+            final data = snapshot.hasData ? snapshot.data! : _cachedData;
+            if (snapshot.hasData) {
               CacheService.save(data);
-
               _cachedData = data;
             }
-          final isLoading = snapshot.connectionState == ConnectionState.waiting &&
-                  !snapshot.hasData &&
-                  !_cacheLoaded;
+            final isLoading =
+                snapshot.connectionState == ConnectionState.waiting &&
+                    !snapshot.hasData &&
+                    !_cacheLoaded;
 
-          // Now uses Firebase thresholds, not hardcoded constants
-          final hasCriticalAlert = data.systemOnline && (
-            data.temperature > maxTemp ||
-            data.waterLevel == 'EMPTY' ||
-            data.feedLowActive      
-          );
+            final containerEmpty = data.containerLevel.toLowerCase() == 'empty';
 
-          String alertMessage = '';
-          if (data.waterLevel == 'EMPTY') {
-            alertMessage = 'Water Container Empty! Refill Required Immediately.';
-          } else if (data.temperature > maxTemp) {
-            alertMessage =
-                'Temperature Critical! Reached ${data.temperature.toStringAsFixed(1)}°C';
-          } else if (data.feedLowActive) {   // was: data.feedLevelPercent < (feedLowPercent / 100)
-            alertMessage = 'Feed Running Low! Refill needed soon.';
-          }
+            final hasCriticalAlert = data.systemOnline &&
+                (data.temperature > maxTemp ||
+                    containerEmpty ||
+                    data.feedLowActive);
 
-          return Container(
-            decoration: const BoxDecoration(
-              color: Color(0xFFF5F5F5),
-            ),
-            child: isLoading
-                ? const Center(
-                    child: CircularProgressIndicator(color: Color.fromARGB(255, 215, 196, 47)))
-                : CustomScrollView(
-                    slivers: [
-                      if (!_hasInternet)
-                        const SliverToBoxAdapter(
-                          child: Padding(
-                            padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
-                            child: Card(
-                              color: Color(0xFFFFF3CD),
-                              child: Padding(
-                                padding: EdgeInsets.all(12),
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.wifi_off, color: Colors.orange),
-                                    SizedBox(width: 10),
-                                    Expanded(
-                                      child: Text(
-                                        'Offline - Showing last synchronized data',
-                                        style: TextStyle(fontWeight: FontWeight.w600),
+            String alertMessage = '';
+            if (containerEmpty) {
+              alertMessage =
+                  'Water Container Empty! Refill Required Immediately.';
+            } else if (data.temperature > maxTemp) {
+              alertMessage =
+                  'Temperature Critical! Reached ${data.temperature.toStringAsFixed(1)}°C';
+            } else if (data.feedLowActive) {
+              alertMessage = 'Feed Running Low! Refill needed soon.';
+            }
+
+            return Container(
+              decoration: const BoxDecoration(color: Color(0xFFF5F5F5)),
+              child: isLoading
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                          color: Color.fromARGB(255, 215, 196, 47)))
+                  : CustomScrollView(
+                      slivers: [
+                        if (!_hasInternet)
+                          const SliverToBoxAdapter(
+                            child: Padding(
+                              padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+                              child: Card(
+                                color: Color(0xFFFFF3CD),
+                                child: Padding(
+                                  padding: EdgeInsets.all(12),
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.wifi_off,
+                                          color: Colors.orange),
+                                      SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          'Offline - Showing last synchronized data',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.w600),
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
 
-                      // ── Custom header ──────────────────────────
-                      SliverToBoxAdapter(
-                        child: _buildHeader(context, data),
-                      ),
-
-                      // ── Critical alert banner ──────────────────
-                      if (hasCriticalAlert)
+                        // ── Header ─────────────────────────────
                         SliverToBoxAdapter(
-                          child: _AlertBanner(message: alertMessage),
+                          child: _buildHeader(context, data),
                         ),
 
-                      // ── 2x2 Sensor cards grid ──────────────────
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            children: [
-                              // Row 1: Temperature & Humidity
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: _TempHumCard(
-                                      title: 'Temperature',
-                                      value: '${data.temperature.toStringAsFixed(0)}°C',
-                                      icon: Icons.thermostat,
-                                      iconColor: Colors.orange,
-                                      status: _tempStatus(data.temperature, maxTemp, minTemp),
-                                      statusColor: _tempColor(data.temperature, maxTemp, minTemp),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: _TempHumCard(
-                                      title: 'Humidity',
-                                      value: '${data.humidity.toStringAsFixed(0)}%',
-                                      icon: Icons.cloud,
-                                      iconColor: Colors.blue,
-                                      status: _humStatus(data.humidity, humMax, humMin),
-                                      statusColor: _humColor(data.humidity, humMax, humMin),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              // Row 2: Feed Level & Water Level
-                              // Row 2: Feed Level & Water Level
-                              StreamBuilder<ActuatorState>(
-                                stream: FirebaseService().actuatorsStream(),
-                                builder: (context, actuatorSnap) {
-                                  final actuatorData = actuatorSnap.data ?? const ActuatorState();
-                                  return Row(
-                                    children: [
-                                      Expanded(
-                                        child: _FeedLevelCard(
-                                          data: data,
-                                          feedLowPercent: feedLowPercent,
-                                          isDispensing: actuatorData.feedServo,
-                                        ),
+                        // ── Critical alert banner ──────────────
+                        if (hasCriticalAlert)
+                          SliverToBoxAdapter(
+                            child: _AlertBanner(message: alertMessage),
+                          ),
+
+                        // ── Sensor cards ───────────────────────
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              children: [
+                                // Row 1: Temperature & Humidity
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _TempHumCard(
+                                        title: 'Temperature',
+                                        value:
+                                            '${data.temperature.toStringAsFixed(0)}°C',
+                                        icon: Icons.thermostat,
+                                        iconColor: Colors.orange,
+                                        status: _tempStatus(
+                                            data.temperature, maxTemp, minTemp),
+                                        statusColor: _tempColor(
+                                            data.temperature, maxTemp, minTemp),
                                       ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: _WaterLevelCard(
-                                          data: data,
-                                          isDispensing: actuatorData.waterServo,
-                                        ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: _TempHumCard(
+                                        title: 'Humidity',
+                                        value:
+                                            '${data.humidity.toStringAsFixed(0)}%',
+                                        icon: Icons.cloud,
+                                        iconColor: Colors.blue,
+                                        status: _humStatus(
+                                            data.humidity, humMax, humMin),
+                                        statusColor: _humColor(
+                                            data.humidity, humMax, humMin),
                                       ),
-                                    ],
-                                  );
-                                },
-                              ),
-                            ],
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+
+                                // Row 2: Feed Level & Water Container
+                                StreamBuilder<ActuatorState>(
+                                  stream: FirebaseService().actuatorsStream(),
+                                  builder: (context, actuatorSnap) {
+                                    final actuatorData = actuatorSnap.data ??
+                                        const ActuatorState();
+                                    return IntrinsicHeight(
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          Expanded(
+                                            child: _FeedLevelCard(
+                                              data: data,
+                                              isDispensing:
+                                                  actuatorData.feedServo,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: _WaterContainerCard(
+                                              data: data,
+                                              isRefilling:
+                                                  actuatorData.waterServo,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                                const SizedBox(height: 12),
+
+                                // Row 3: Feed Container (ultrasonic)
+                                StreamBuilder<Map<String, dynamic>>(
+                                  stream: FirebaseService().sensorRawStream(),
+                                  builder: (context, snap) => _FeedContainerCard(
+                                      raw: snap.data ??
+                                          const <String, dynamic>{}),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
 
-                      // ── Environmental Control Status ────────────
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(15, 0, 14, 12),
-                          child: StreamBuilder<ActuatorState>(
-                            stream: FirebaseService().actuatorsStream(),
-                            builder: (context, actuatorSnapshot) {
-                              final actuatorData =
-                                  actuatorSnapshot.data ?? const ActuatorState();
-                              return _EnvironmentalControlStatus(data: actuatorData);
-                            },
+                        // ── Environmental Control Status ───────
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(15, 0, 14, 12),
+                            child: StreamBuilder<ActuatorState>(
+                              stream: FirebaseService().actuatorsStream(),
+                              builder: (context, actuatorSnapshot) {
+                                final actuatorData =
+                                    actuatorSnapshot.data ??
+                                        const ActuatorState();
+                                return _EnvironmentalControlStatus(
+                                    data: actuatorData);
+                              },
+                            ),
                           ),
                         ),
-                      ),
 
-                      // ── Spacing ────────────────────────────────
-                      const SliverToBoxAdapter(
-                        child: SizedBox(height: 80),
-                      ),
-                    ],
-                  ),
-          );
-        },
-      );
-    },
-  );
-}
+                        const SliverToBoxAdapter(child: SizedBox(height: 80)),
+                      ],
+                    ),
+            );
+          },
+        );
+      },
+    );
+  }
 
   Widget _buildHeader(BuildContext context, SensorData data) {
     return Container(
@@ -296,11 +322,9 @@ Widget build(BuildContext context) {
               fontWeight: FontWeight.w500,
             ),
           ),
-
           const SizedBox(height: 8),
-
           Text(
-            '$_greeting,\n${_userName}!',
+            '$_greeting,\n$_userName!',
             style: const TextStyle(
               fontSize: 30,
               height: 1.1,
@@ -308,16 +332,12 @@ Widget build(BuildContext context) {
               color: Colors.white,
             ),
           ),
-
           const SizedBox(height: 20),
-
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 8,
-                ),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.9),
                   borderRadius: BorderRadius.circular(30),
@@ -326,29 +346,25 @@ Widget build(BuildContext context) {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                          !_hasInternet
-                              ? Icons.wifi_off_rounded
-                              : Icons.wifi_rounded,
-                          size: 16,
-                          color: !_hasInternet
-                              ? Colors.red
-                              : data.systemOnline
-                                  ? Colors.green
-                                  : Colors.orange,
-                        ),
-
-                        const SizedBox(width: 6),
-
-                        Text(
-                          !_hasInternet
-                              ? 'Offline'
-                              : data.systemOnline
-                                  ? 'Online'
-                                  : 'System Device Offline',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                      !_hasInternet
+                          ? Icons.wifi_off_rounded
+                          : Icons.wifi_rounded,
+                      size: 16,
+                      color: !_hasInternet
+                          ? Colors.red
+                          : data.systemOnline
+                              ? Colors.green
+                              : Colors.orange,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      !_hasInternet
+                          ? 'Offline'
+                          : data.systemOnline
+                              ? 'Online'
+                              : 'System Device Offline',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
                   ],
                 ),
               ),
@@ -359,29 +375,29 @@ Widget build(BuildContext context) {
     );
   }
 
-Color _tempColor(double t, double maxTemp, double minTemp) {
-  if (t > maxTemp) return const Color(0xFFFF6B6B);
-  if (t < minTemp) return AppColors.info;
-  return kStatusGreen;
-}
+  Color _tempColor(double t, double maxTemp, double minTemp) {
+    if (t > maxTemp) return const Color(0xFFFF6B6B);
+    if (t < minTemp) return AppColors.info;
+    return kStatusGreen;
+  }
 
-String _tempStatus(double t, double maxTemp, double minTemp) {
-  if (t > maxTemp) return 'High';
-  if (t < minTemp) return 'Low';
-  return 'Normal';
-}
+  String _tempStatus(double t, double maxTemp, double minTemp) {
+    if (t > maxTemp) return 'High';
+    if (t < minTemp) return 'Low';
+    return 'Normal';
+  }
 
-String _humStatus(double h, double humMax, double humMin) {
-  if (h > humMax) return 'High';
-  if (h < humMin) return 'Low';
-  return 'Normal';
-}
+  String _humStatus(double h, double humMax, double humMin) {
+    if (h > humMax) return 'High';
+    if (h < humMin) return 'Low';
+    return 'Normal';
+  }
 
-Color _humColor(double h, double humMax, double humMin) {
-  if (h > humMax) return const Color(0xFFFF6B6B);
-  if (h < humMin) return const Color(0xFFFFA500);
-  return kStatusGreen;
-}
+  Color _humColor(double h, double humMax, double humMin) {
+    if (h > humMax) return const Color(0xFFFF6B6B);
+    if (h < humMin) return const Color(0xFFFFA500);
+    return kStatusGreen;
+  }
 }
 
 // ── Critical alert banner ─────────────────────────────────────
@@ -396,19 +412,13 @@ class _AlertBanner extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: const Color(0xFFFFEAEA),
-        border: Border.all(
-          color: const Color(0xFFFF6B6B),
-          width: 1.5,
-        ),
+        border: Border.all(color: const Color(0xFFFF6B6B), width: 1.5),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
-          const Icon(
-            Icons.warning_amber_rounded,
-            color: Color(0xFFFF6B6B),
-            size: 24,
-          ),
+          const Icon(Icons.warning_amber_rounded,
+              color: Color(0xFFFF6B6B), size: 24),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -429,12 +439,10 @@ class _AlertBanner extends StatelessWidget {
 // ── Feed Level Card ────────────────────────────────────────────
 class _FeedLevelCard extends StatefulWidget {
   final SensorData data;
-  final double feedLowPercent;
   final bool isDispensing;
 
   const _FeedLevelCard({
     required this.data,
-    required this.feedLowPercent,
     required this.isDispensing,
   });
 
@@ -445,54 +453,58 @@ class _FeedLevelCard extends StatefulWidget {
 class _FeedLevelCardState extends State<_FeedLevelCard> {
   bool _localPending = false;
 
-Future<void> _handleDispense() async {
-  final controller = TextEditingController(text: '100');
+  Future<void> _handleDispense() async {
+    final controller = TextEditingController(text: '100');
 
-  final percent = await showDialog<double>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Dispense Feed'),
-      content: TextField(
-        controller: controller,
-        keyboardType: TextInputType.number,
-        autofocus: true,
-        decoration: const InputDecoration(suffixText: '%', labelText: 'Amount to dispense'),
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-        FilledButton(
-          onPressed: () {
-            final val = double.tryParse(controller.text.trim());
-            if (val != null && val > 0) Navigator.pop(context, val.clamp(0, 100).toDouble());
-          },
-          child: const Text('Dispense'),
+    final percent = await showDialog<double>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Dispense Feed'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          autofocus: true,
+          decoration: const InputDecoration(
+              suffixText: '%', labelText: 'Amount to dispense'),
         ),
-      ],
-    ),
-  );
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () {
+              final val = double.tryParse(controller.text.trim());
+              if (val != null && val > 0) {
+                Navigator.pop(context, val.clamp(0, 100).toDouble());
+              }
+            },
+            child: const Text('Dispense'),
+          ),
+        ],
+      ),
+    );
 
-  if (percent == null) return;
+    if (percent == null) return;
 
-  setState(() => _localPending = true);
-  try {
-    await FirebaseService().saveThreshold('manualDispensePercent', percent);
-    await FirebaseService().triggerManualFeedFromSettings();
-  } catch (_) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to trigger feed dispense.')),
-      );
+    setState(() => _localPending = true);
+    try {
+      await FirebaseService().saveThreshold('manualDispensePercent', percent);
+      await FirebaseService().triggerManualFeedFromSettings();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to trigger feed dispense.')),
+        );
+      }
     }
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _localPending = false);
+    });
   }
-  Future.delayed(const Duration(seconds: 2), () {
-    if (mounted) setState(() => _localPending = false);
-  });
-}
 
   @override
   Widget build(BuildContext context) {
     final data = widget.data;
-    final feedLowPercent = widget.feedLowPercent;
     final busy = widget.isDispensing || _localPending;
 
     final percentValue = (data.feedLevelPercent * 100).round();
@@ -500,11 +512,11 @@ Future<void> _handleDispense() async {
     Color statusBgColor;
     Color statusTextColor;
 
-    if (data.feedLowActive) {              // was: percentValue < feedLowPercent
+    if (data.feedLowActive) {
       feedStatus = 'Low';
       statusBgColor = const Color(0xFFFFF3CD);
       statusTextColor = const Color(0xFF856404);
-    } else if (percentValue <= 95) {       // was: percentValue >= feedLowPercent && percentValue <= 70
+    } else if (percentValue <= 95) {
       feedStatus = 'Normal';
       statusBgColor = const Color(0xFFD4EDDA);
       statusTextColor = kStatusGreen;
@@ -535,30 +547,41 @@ Future<void> _handleDispense() async {
               Icon(Icons.grain, color: Colors.orange, size: 24),
               SizedBox(width: 8),
               Text('Feed Level',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87)),
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87)),
             ],
           ),
           const SizedBox(height: 12),
           Text('$percentValue%',
-              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black)),
+              style: const TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black)),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(color: statusBgColor, borderRadius: BorderRadius.circular(6)),
+            decoration: BoxDecoration(
+                color: statusBgColor, borderRadius: BorderRadius.circular(6)),
             child: Text(feedStatus,
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: statusTextColor)),
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: statusTextColor)),
           ),
+          const Spacer(),
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
               onPressed: busy ? null : _handleDispense,
-              child: Text(busy ? 'Dispensing…' : 'Dispense Now'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Color(0xFFD4C84E),
-                foregroundColor: const Color.fromARGB(255, 0, 0, 0),
+                backgroundColor: const Color(0xFFD4C84E),
+                foregroundColor: Colors.black,
                 padding: const EdgeInsets.symmetric(vertical: 10),
               ),
+              child: Text(busy ? 'Dispensing…' : 'Dispense Now'),
             ),
           ),
         ],
@@ -567,90 +590,45 @@ Future<void> _handleDispense() async {
   }
 }
 
-// ── Water Level Card ───────────────────────────────────────────
-class _WaterLevelCard extends StatefulWidget {
+// ── Water Container Card ───────────────────────────────────────
+// The drinker refills itself on the Pi, so this card shows the
+// CONTAINER (second float sensor) - the part a person must refill.
+class _WaterContainerCard extends StatelessWidget {
   final SensorData data;
-  final bool isDispensing;
+  final bool isRefilling; // true while the Pi is auto-refilling the drinker
 
-  const _WaterLevelCard({required this.data, required this.isDispensing});
-
-  @override
-  State<_WaterLevelCard> createState() => _WaterLevelCardState();
-}
-
-class _WaterLevelCardState extends State<_WaterLevelCard> {
-  bool _localPending = false;
-
-Future<void> _handleDispense() async {
-  if (widget.data.waterLevel.toLowerCase() == 'normal') {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Water level normal, skipping dispense.')),
-    );
-    return;
-  }
-
-  setState(() => _localPending = true);
-  try {
-    await FirebaseService().triggerManualWater();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Dispensing water until level reaches Normal…')),
-      );
-    }
-  } catch (_) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to trigger water dispense.')),
-      );
-    }
-  }
-  Future.delayed(const Duration(seconds: 2), () {
-    if (mounted) setState(() => _localPending = false);
-  });
-}
-
-  @override
-  void didUpdateWidget(covariant _WaterLevelCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // Fires only on the real Pi-confirmed transition: was dispensing,
-    // now stopped, because the sensor reported water level back to Normal.
-    if (oldWidget.isDispensing && !widget.isDispensing) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Water level normal — dispensing stopped.')),
-      );
-    }
-  }
+  const _WaterContainerCard({required this.data, required this.isRefilling});
 
   @override
   Widget build(BuildContext context) {
-    final data = widget.data;
-    final busy = widget.isDispensing || _localPending;
+    final level = data.containerLevel.toLowerCase();
+    String status;
+    String badge;
+    Color badgeBg;
+    Color badgeText;
 
-    String waterStatus;
-    Color statusBgColor;
-    Color statusTextColor;
-
-    switch (data.waterLevel.toLowerCase()) {
-      case 'normal':
-        waterStatus = 'Normal';
-        statusBgColor = const Color(0xFFD4EDDA);
-        statusTextColor = kStatusGreen;
-        break;
-      case 'low':
-        waterStatus = 'Low';
-        statusBgColor = const Color(0xFFFFF3CD);
-        statusTextColor = const Color(0xFF856404);
-        break;
-      case 'empty':
-        waterStatus = 'Empty';
-        statusBgColor = const Color(0xFFF8D7DA);
-        statusTextColor = const Color(0xFFDC3545);
-        break;
-      default:
-        waterStatus = 'Unknown';
-        statusBgColor = const Color(0xFFE2E3E5);
-        statusTextColor = const Color(0xFF6C757D);
+    if (level == 'empty') {
+      status = 'Empty';
+      badge = 'Refill needed';
+      badgeBg = const Color(0xFFF8D7DA);
+      badgeText = const Color(0xFFDC3545);
+    } else if (level == 'ok') {
+      status = 'Has water';
+      badge = 'OK';
+      badgeBg = const Color(0xFFD4EDDA);
+      badgeText = kStatusGreen;
+    } else {
+      status = '--';
+      badge = 'Unknown';
+      badgeBg = const Color(0xFFE2E3E5);
+      badgeText = const Color(0xFF6C757D);
     }
+
+    final drinker = isRefilling
+        ? 'Drinker: refilling...'
+        : data.waterLevel.toLowerCase() == 'low'
+            ? 'Drinker: low'
+            : 'Drinker: OK';
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -658,7 +636,10 @@ Future<void> _handleDispense() async {
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2)),
+          BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2)),
         ],
       ),
       child: Column(
@@ -668,31 +649,159 @@ Future<void> _handleDispense() async {
             children: [
               Icon(Icons.water_drop, color: Colors.blue, size: 24),
               SizedBox(width: 8),
-              Text('Water Level',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87)),
+              Flexible(
+                child: Text('Water Container',
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87)),
+              ),
             ],
           ),
           const SizedBox(height: 12),
-          Text(waterStatus,
-              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black)),
+          Text(status,
+              style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black)),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(color: statusBgColor, borderRadius: BorderRadius.circular(6)),
-            child: Text(waterStatus,
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: statusTextColor)),
+            decoration: BoxDecoration(
+                color: badgeBg, borderRadius: BorderRadius.circular(6)),
+            child: Text(badge,
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: badgeText)),
+          ),
+          const Spacer(),
+          const SizedBox(height: 12),
+          Text(drinker,
+              style: const TextStyle(fontSize: 12, color: Colors.black54)),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Feed Container Card (ultrasonic sensor) ────────────────────
+class _FeedContainerCard extends StatelessWidget {
+  final Map<String, dynamic> raw;
+  const _FeedContainerCard({required this.raw});
+
+  @override
+  Widget build(BuildContext context) {
+    final percent = (raw['feed_bin_percent'] as num?)?.toDouble();
+    final health = raw['sensor_health'];
+    final sensorOk = !(health is Map && health['feed_bin'] == false);
+    final state = (raw['feed_bin_state'] as String?) ??
+        (raw['feed_bin_low_active'] == true ? 'low' : 'ok');
+
+    String status;
+    String badge;
+    Color badgeBg;
+    Color badgeText;
+    Color barColor;
+
+    if (!sensorOk) {
+      status = 'Sensor problem';
+      badge = 'Check the sensor';
+      badgeBg = const Color(0xFFF8D7DA);
+      badgeText = const Color(0xFFDC3545);
+      barColor = Colors.grey;
+    } else if (percent == null) {
+      status = '--';
+      badge = 'Waiting for reading';
+      badgeBg = const Color(0xFFE2E3E5);
+      badgeText = const Color(0xFF6C757D);
+      barColor = Colors.grey;
+    } else if (state == 'empty') {
+      status = 'Empty';
+      badge = 'Refill now';
+      badgeBg = const Color(0xFFF8D7DA);
+      badgeText = const Color(0xFFDC3545);
+      barColor = const Color(0xFFDC3545);
+    } else if (state == 'low') {
+      status = 'Low';
+      badge = 'Refill soon';
+      badgeBg = const Color(0xFFFFF3CD);
+      badgeText = const Color(0xFF856404);
+      barColor = const Color(0xFFFFA500);
+    } else {
+      status = 'Has feed';
+      badge = 'OK';
+      badgeBg = const Color(0xFFD4EDDA);
+      badgeText = kStatusGreen;
+      barColor = kStatusGreen;
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.inventory_2, color: Colors.orange, size: 24),
+              SizedBox(width: 8),
+              Text('Feed Container',
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87)),
+            ],
           ),
           const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: busy ? null : _handleDispense,
-              child: Text(busy ? 'Dispensing…' : 'Dispense Now'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Color(0xFFD4C84E),
-                foregroundColor: Colors.black,
-                padding: const EdgeInsets.symmetric(vertical: 10),
+          Row(
+            children: [
+              Text(
+                percent != null && sensorOk
+                    ? '${percent.toStringAsFixed(0)}%'
+                    : '--',
+                style: const TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black),
               ),
+              const SizedBox(width: 12),
+              Text(status,
+                  style: const TextStyle(fontSize: 16, color: Colors.black87)),
+              const Spacer(),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                    color: badgeBg, borderRadius: BorderRadius.circular(6)),
+                child: Text(badge,
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: badgeText)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: (percent != null && sensorOk)
+                  ? (percent / 100).clamp(0.0, 1.0)
+                  : 0,
+              minHeight: 8,
+              backgroundColor: const Color(0xFFF0F0F0),
+              valueColor: AlwaysStoppedAnimation<Color>(barColor),
             ),
           ),
         ],
@@ -790,9 +899,6 @@ class _EnvironmentalControlStatus extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final exhaustFanActive = data.exhaustFan;
-    final heatingLampActive = data.heatingLamp;
-
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -822,17 +928,17 @@ class _EnvironmentalControlStatus extends StatelessWidget {
             children: [
               Expanded(
                 child: _DeviceStateBox(
-                    title: 'Exhaust Fan',
-                    isActive: exhaustFanActive,
-                    activeColor: Colors.blue,
-                    icon: Icons.air,
-                  ),
+                  title: 'Exhaust Fan',
+                  isActive: data.exhaustFan,
+                  activeColor: Colors.blue,
+                  icon: Icons.air,
                 ),
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: _DeviceStateBox(
                   title: 'Heating Lamp',
-                  isActive: heatingLampActive,
+                  isActive: data.heatingLamp,
                   activeColor: Colors.orange,
                   icon: Icons.lightbulb,
                 ),
@@ -864,7 +970,8 @@ class _DeviceStateBox extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isActive ? activeColor.withOpacity(0.1) : const Color(0xFFF0F0F0),
+        color:
+            isActive ? activeColor.withOpacity(0.1) : const Color(0xFFF0F0F0),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isActive ? activeColor.withOpacity(0.3) : Colors.grey.shade300,
@@ -873,11 +980,7 @@ class _DeviceStateBox extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Icon(
-            icon,
-            color: isActive ? activeColor : Colors.grey,
-            size: 32,
-          ),
+          Icon(icon, color: isActive ? activeColor : Colors.grey, size: 32),
           const SizedBox(height: 8),
           Text(
             title,

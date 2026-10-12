@@ -11,6 +11,7 @@
 //   Stream<SensorData> stream = db.sensorStream();
 // ============================================================
 
+import 'dart:async';
 import 'package:firebase_database/firebase_database.dart';
 import '../models/sensor_data.dart';
 import '../models/actuator_state.dart';
@@ -37,7 +38,22 @@ class FirebaseService {
   databaseURL: 'https://poultrycare-f816d-default-rtdb.asia-southeast1.firebasedatabase.app/',
 );
 
+  // ── Pi online detection ──────────────────────────────────────────────────
+  // The Pi can't write "offline" to Firebase when it loses WiFi, so the app
+  // decides for itself: if sensor_data/last_updated hasn't changed for this
+  // long, the Pi is treated as offline. The Pi pushes about once per second.
+  static const int _piStaleAfterMs = 5000;
 
+  // Phone-clock vs Firebase-server-clock difference, so the comparison
+  // still works if the phone's clock is a bit off.
+  int _serverOffsetMs = 0;
+  StreamSubscription<DatabaseEvent>? _offsetSub;
+
+  void _ensureServerOffsetListener() {
+    _offsetSub ??= _db.ref('.info/serverTimeOffset').onValue.listen((event) {
+      _serverOffsetMs = (event.snapshot.value as num?)?.toInt() ?? 0;
+    });
+  }
 
   // ── Convenience getters for frequently-used references ───────────────────
   DatabaseReference get _sensorRef => _db.ref(AppConstants.dbSensorData);
@@ -49,6 +65,14 @@ class FirebaseService {
   DatabaseReference get _thresholdsRef => _db.ref('thresholds');
   DatabaseReference get _notifRef => _db.ref('notifications_enabled');
   DatabaseReference get _notificationsRef => _db.ref('notifications');
+
+  /// Raw sensor_data map (feed container, health, fault reasons...).
+  Stream<Map<String, dynamic>> sensorRawStream() {
+    return _sensorRef.onValue.map((event) {
+      final v = event.snapshot.value;
+      return v is Map ? Map<String, dynamic>.from(v) : <String, dynamic>{};
+    });
+  }
 
 Stream<List<MapEntry<String, dynamic>>> notificationsStream({int limit = 50}) {
   return FirebaseDatabase.instance
@@ -89,17 +113,62 @@ Stream<bool> connectionStream() {
   // ==========================================================================
 
   /// Returns a continuous Stream of [SensorData] that updates whenever
-  /// the Arduino writes new sensor readings to Firebase.
+  /// the Pi writes new sensor readings to Firebase.
+  ///
+  /// [SensorData.systemOnline] is computed here from how recent
+  /// `last_updated` is, and the check re-runs every second - so the app
+  /// flips to offline even when NO new Firebase event arrives (which is
+  /// exactly what happens when the Pi loses its internet).
   ///
   /// Usage in a StreamBuilder:
   ///   stream: FirebaseService().sensorStream()
   Stream<SensorData> sensorStream() {
-    return _sensorRef.onValue.map((event) {
-      // If the node doesn't exist yet, return empty/default SensorData.
-      if (!event.snapshot.exists) return const SensorData();
-      final map = event.snapshot.value as Map<dynamic, dynamic>;
-      return SensorData.fromMap(map);
-    });
+    _ensureServerOffsetListener();
+
+    late final StreamController<SensorData> controller;
+    StreamSubscription<DatabaseEvent>? sub;
+    Timer? ticker;
+    SensorData last = const SensorData();
+    bool hasData = false;
+
+    void emit() {
+      if (controller.isClosed || !hasData) return;
+      final serverNow =
+          DateTime.now().millisecondsSinceEpoch + _serverOffsetMs;
+      final fresh = last.lastUpdated > 0 &&
+          (serverNow - last.lastUpdated) < _piStaleAfterMs;
+      controller.add(last.copyWith(systemOnline: fresh));
+    }
+
+    controller = StreamController<SensorData>.broadcast(
+      onListen: () {
+        sub = _sensorRef.onValue.listen(
+          (event) {
+            if (!event.snapshot.exists) {
+              last = const SensorData();
+            } else {
+              final map = event.snapshot.value as Map<dynamic, dynamic>;
+              last = SensorData.fromMap(map);
+            }
+            hasData = true;
+            emit();
+          },
+          onError: (Object e, StackTrace st) {
+            if (!controller.isClosed) controller.addError(e, st);
+          },
+        );
+        ticker = Timer.periodic(const Duration(seconds: 1), (_) => emit());
+      },
+      onCancel: () {
+        sub?.cancel();
+        ticker?.cancel();
+        sub = null;
+        ticker = null;
+        hasData = false;
+      },
+    );
+
+    return controller.stream;
   }
 
     /// Returns a continuous Stream of [ActuatorState] that updates whenever
@@ -153,12 +222,6 @@ Future<void> triggerManualFeedFromSettings() async {
 
   await triggerManualFeed(grams: grams);
 }
-
-  Future<void> triggerManualWater() async {
-    await FirebaseDatabase.instance.ref('sensor_data').update({
-      'water_dispenser': true,
-    });
-  }
 
   /// Turns the heating lamp ON (true) or OFF (false).
   Future<void> setHeatingLamp(bool isOn) async {
@@ -217,22 +280,6 @@ Future<void> triggerManualFeedFromSettings() async {
       type: LogType.feeding,
       title: 'Manual Feed Dispense',
       message: 'Quick dispense triggered (${grams.toStringAsFixed(0)}g) via mobile app.',
-      timestamp: DateTime.now().millisecondsSinceEpoch,
-    ));
-  }
-
-  /// Sets the water dispenser valve ON or OFF.
-  Future<void> setWaterDispenser(bool isOn) async {
-    await _sensorRef.update({
-      'water_active': isOn,
-    });
-    await addLog(ActivityLog(
-      id: '',
-      type: LogType.water,
-      title: isOn ? 'Water Dispenser ON' : 'Water Dispenser OFF',
-      message: isOn
-          ? 'Water dispenser opened via mobile app.'
-          : 'Water dispenser closed via mobile app.',
       timestamp: DateTime.now().millisecondsSinceEpoch,
     ));
   }
