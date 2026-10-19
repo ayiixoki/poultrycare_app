@@ -1,14 +1,9 @@
 // ============================================================
 // lib/screens/dashboard_screen.dart
 // ============================================================
-// Greeting header, critical alert banner, sensor cards
-// (temperature, humidity, feed, water + container), and the
-// environmental control status.
-//
-// Water: the trough is refilled automatically by the Pi, so the
-// water card has no button. It shows the trough level, a
-// "Refilling" state while the Pi's water servo is open, and the
-// water CONTAINER status (ok / empty).
+// Greeting header (with Settings button), critical alert banner,
+// live camera card, sensor cards (temperature, humidity, feed level,
+// drinker), container cards (same as the LCD), and environmental control.
 // ============================================================
 
 import 'dart:async';
@@ -23,6 +18,8 @@ import '../services/cache_service.dart';
 import '../services/firebase_service.dart';
 import '../utils/app_colors.dart';
 import '../utils/constants.dart';
+import 'settings_screen.dart';
+import 'camera_screen.dart';
 
 const Color kStatusGreen = Color(0xFF28A745);
 
@@ -188,6 +185,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             child: _AlertBanner(message: alertMessage),
                           ),
 
+                        // ── Live camera card ───────────────────
+                        const SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+                            child: _CameraCard(),
+                          ),
+                        ),
+
                         // ── Sensor cards ───────────────────────
                         SliverToBoxAdapter(
                           child: Padding(
@@ -228,7 +233,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 ),
                                 const SizedBox(height: 12),
 
-                                // Row 2: Feed Level & Water Container
+                                // Row 2: Feed Level & Drinker
                                 StreamBuilder<ActuatorState>(
                                   stream: FirebaseService().actuatorsStream(),
                                   builder: (context, actuatorSnap) {
@@ -248,7 +253,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                           ),
                                           const SizedBox(width: 12),
                                           Expanded(
-                                            child: _WaterContainerCard(
+                                            child: _DrinkerCard(
                                               data: data,
                                               isRefilling:
                                                   actuatorData.waterServo,
@@ -261,13 +266,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 ),
                                 const SizedBox(height: 12),
 
-                                // Row 3: Feed Container (ultrasonic)
-                                StreamBuilder<Map<String, dynamic>>(
-                                  stream: FirebaseService().sensorRawStream(),
-                                  builder: (context, snap) => _FeedContainerCard(
-                                      raw: snap.data ??
-                                          const <String, dynamic>{}),
-                                ),
+                                // Row 3: Feed Container + Water Container (same as LCD)
+                                _ContainersRow(data: data),
                               ],
                             ),
                           ),
@@ -280,9 +280,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             child: StreamBuilder<ActuatorState>(
                               stream: FirebaseService().actuatorsStream(),
                               builder: (context, actuatorSnapshot) {
-                                final actuatorData =
-                                    actuatorSnapshot.data ??
-                                        const ActuatorState();
+                                final actuatorData = actuatorSnapshot.data ??
+                                    const ActuatorState();
                                 return _EnvironmentalControlStatus(
                                     data: actuatorData);
                               },
@@ -303,7 +302,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildHeader(BuildContext context, SensorData data) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(24, 60, 24, 32),
       decoration: const BoxDecoration(
         color: Color(0xFFD4C84E),
         borderRadius: BorderRadius.only(
@@ -311,64 +309,90 @@ class _DashboardScreenState extends State<DashboardScreen> {
           bottomRight: Radius.circular(42),
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Stack(
         children: [
-          Text(
-            DateFormat('EEEE, MMMM d').format(DateTime.now()),
-            style: const TextStyle(
-              fontSize: 14,
-              color: Color(0xFF666666),
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '$_greeting,\n$_userName!',
-            style: const TextStyle(
-              fontSize: 30,
-              height: 1.1,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.9),
-                  borderRadius: BorderRadius.circular(30),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 60, 24, 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  DateFormat('EEEE, MMMM d').format(DateTime.now()),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF666666),
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+                const SizedBox(height: 8),
+                Text(
+                  '$_greeting,\n$_userName!',
+                  style: const TextStyle(
+                    fontSize: 30,
+                    height: 1.1,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Row(
                   children: [
-                    Icon(
-                      !_hasInternet
-                          ? Icons.wifi_off_rounded
-                          : Icons.wifi_rounded,
-                      size: 16,
-                      color: !_hasInternet
-                          ? Colors.red
-                          : data.systemOnline
-                              ? Colors.green
-                              : Colors.orange,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      !_hasInternet
-                          ? 'Offline'
-                          : data.systemOnline
-                              ? 'Online'
-                              : 'System Device Offline',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.9),
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            !_hasInternet
+                                ? Icons.wifi_off_rounded
+                                : Icons.wifi_rounded,
+                            size: 16,
+                            color: !_hasInternet
+                                ? Colors.red
+                                : data.systemOnline
+                                    ? Colors.green
+                                    : Colors.orange,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            !_hasInternet
+                                ? 'Offline'
+                                : data.systemOnline
+                                    ? 'Online'
+                                    : 'System Device Offline',
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
+              ],
+            ),
+          ),
+          // Settings button, top right corner
+          Positioned(
+            top: 48,
+            right: 16,
+            child: Material(
+              color: Colors.white.withOpacity(0.9),
+              shape: const CircleBorder(),
+              child: IconButton(
+                icon: const Icon(Icons.settings_rounded, color: Colors.black87),
+                tooltip: 'Settings',
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                  );
+                },
               ),
-            ],
+            ),
           ),
         ],
       ),
@@ -397,6 +421,98 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (h > humMax) return const Color(0xFFFF6B6B);
     if (h < humMin) return const Color(0xFFFFA500);
     return kStatusGreen;
+  }
+}
+
+// ── Live Camera Card ───────────────────────────────────────────
+// The whole card is tappable. "Watch Live" is a plain styled label (not a
+// button widget) so the app theme can never affect its size.
+class _CameraCard extends StatelessWidget {
+  const _CameraCard();
+
+  void _open(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const CameraScreen()),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () => _open(context),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD4C84E).withOpacity(0.25),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.videocam_rounded,
+                      color: Color(0xFF8A7F1F), size: 26),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Live Camera',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Watch your chickens in real time',
+                        style: TextStyle(fontSize: 12, color: Colors.black54),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD4C84E),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Text(
+                    'Watch Live',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -590,45 +706,35 @@ class _FeedLevelCardState extends State<_FeedLevelCard> {
   }
 }
 
-// ── Water Container Card ───────────────────────────────────────
-// The drinker refills itself on the Pi, so this card shows the
-// CONTAINER (second float sensor) - the part a person must refill.
-class _WaterContainerCard extends StatelessWidget {
+// ── Drinker Card (trough, auto-refilled by the Pi) ─────────────
+class _DrinkerCard extends StatelessWidget {
   final SensorData data;
-  final bool isRefilling; // true while the Pi is auto-refilling the drinker
+  final bool isRefilling; // true while the Pi's water servo is open
 
-  const _WaterContainerCard({required this.data, required this.isRefilling});
+  const _DrinkerCard({required this.data, required this.isRefilling});
 
   @override
   Widget build(BuildContext context) {
-    final level = data.containerLevel.toLowerCase();
-    String status;
+    final isLow = data.waterLevel.toLowerCase() == 'low';
+
+    final String status = isLow ? 'Low' : 'Normal';
     String badge;
     Color badgeBg;
     Color badgeText;
 
-    if (level == 'empty') {
-      status = 'Empty';
-      badge = 'Refill needed';
-      badgeBg = const Color(0xFFF8D7DA);
-      badgeText = const Color(0xFFDC3545);
-    } else if (level == 'ok') {
-      status = 'Has water';
-      badge = 'OK';
+    if (isRefilling) {
+      badge = 'Refilling…';
+      badgeBg = const Color(0xFFD1ECFF);
+      badgeText = const Color(0xFF004085);
+    } else if (isLow) {
+      badge = 'Low';
+      badgeBg = const Color(0xFFFFF3CD);
+      badgeText = const Color(0xFF856404);
+    } else {
+      badge = 'Normal';
       badgeBg = const Color(0xFFD4EDDA);
       badgeText = kStatusGreen;
-    } else {
-      status = '--';
-      badge = 'Unknown';
-      badgeBg = const Color(0xFFE2E3E5);
-      badgeText = const Color(0xFF6C757D);
     }
-
-    final drinker = isRefilling
-        ? 'Drinker: refilling...'
-        : data.waterLevel.toLowerCase() == 'low'
-            ? 'Drinker: low'
-            : 'Drinker: OK';
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -649,19 +755,17 @@ class _WaterContainerCard extends StatelessWidget {
             children: [
               Icon(Icons.water_drop, color: Colors.blue, size: 24),
               SizedBox(width: 8),
-              Flexible(
-                child: Text('Water Container',
-                    style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87)),
-              ),
+              Text('Drinker',
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87)),
             ],
           ),
           const SizedBox(height: 12),
           Text(status,
               style: const TextStyle(
-                  fontSize: 24,
+                  fontSize: 28,
                   fontWeight: FontWeight.bold,
                   color: Colors.black)),
           const SizedBox(height: 8),
@@ -677,70 +781,134 @@ class _WaterContainerCard extends StatelessWidget {
           ),
           const Spacer(),
           const SizedBox(height: 12),
-          Text(drinker,
-              style: const TextStyle(fontSize: 12, color: Colors.black54)),
+          const Text('Auto-refilled',
+              style: TextStyle(fontSize: 12, color: Colors.black54)),
         ],
       ),
     );
   }
 }
 
-// ── Feed Container Card (ultrasonic sensor) ────────────────────
-class _FeedContainerCard extends StatelessWidget {
-  final Map<String, dynamic> raw;
-  const _FeedContainerCard({required this.raw});
+// ── Containers row (same words + colors as the LCD) ────────────
+class _ContainersRow extends StatelessWidget {
+  final SensorData data;
+  const _ContainersRow({required this.data});
 
   @override
   Widget build(BuildContext context) {
-    final percent = (raw['feed_bin_percent'] as num?)?.toDouble();
-    final health = raw['sensor_health'];
-    final sensorOk = !(health is Map && health['feed_bin'] == false);
-    final state = (raw['feed_bin_state'] as String?) ??
-        (raw['feed_bin_low_active'] == true ? 'low' : 'ok');
+    return StreamBuilder<Map<String, dynamic>>(
+      stream: FirebaseService().sensorRawStream(),
+      builder: (context, snap) {
+        final raw = snap.data ?? const <String, dynamic>{};
 
-    String status;
-    String badge;
-    Color badgeBg;
-    Color badgeText;
-    Color barColor;
+        // ---- Feed container: Full / Normal / Low / Empty ----
+        final health = raw['sensor_health'];
+        final feedSensorOk = !(health is Map && health['feed_bin'] == false);
+        final pct = (raw['feed_bin_percent'] as num?)?.toDouble();
+        final binState = (raw['feed_bin_state'] as String?) ??
+            (raw['feed_bin_low_active'] == true ? 'low' : 'ok');
+        String feedLabel = (raw['feed_bin_label'] as String?) ?? '';
+        if (feedLabel.isEmpty) {
+          if (binState == 'empty') {
+            feedLabel = 'Empty';
+          } else if (binState == 'low') {
+            feedLabel = 'Low';
+          } else if (pct == null) {
+            feedLabel = '--';
+          } else {
+            feedLabel = pct >= 80 ? 'Full' : 'Normal';
+          }
+        }
+
+        // ---- Water container: Normal / Low ----
+        String waterLabel = (raw['water_bin_label'] as String?) ?? '';
+        if (waterLabel.isEmpty) {
+          final lvl = data.containerLevel.toLowerCase();
+          waterLabel = lvl == 'empty'
+              ? 'Low'
+              : lvl == 'ok'
+                  ? 'Normal'
+                  : '--';
+        }
+
+        return IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: _ContainerCard(
+                  title: 'Feed Container',
+                  icon: Icons.inventory_2,
+                  iconColor: Colors.orange,
+                  label: feedLabel,
+                  isFeed: true,
+                  sensorOk: feedSensorOk,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _ContainerCard(
+                  title: 'Water Container',
+                  icon: Icons.water_drop,
+                  iconColor: Colors.blue,
+                  label: waterLabel,
+                  isFeed: false,
+                  sensorOk: true,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ContainerCard extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final Color iconColor;
+  final String label; // Full / Normal / Low / Empty / --
+  final bool isFeed;
+  final bool sensorOk;
+
+  const _ContainerCard({
+    required this.title,
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.isFeed,
+    required this.sensorOk,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    String text = label;
+    String hint = ' ';
+    Color bg = Colors.white;
+    Color fg = kStatusGreen;
 
     if (!sensorOk) {
-      status = 'Sensor problem';
-      badge = 'Check the sensor';
-      badgeBg = const Color(0xFFF8D7DA);
-      badgeText = const Color(0xFFDC3545);
-      barColor = Colors.grey;
-    } else if (percent == null) {
-      status = '--';
-      badge = 'Waiting for reading';
-      badgeBg = const Color(0xFFE2E3E5);
-      badgeText = const Color(0xFF6C757D);
-      barColor = Colors.grey;
-    } else if (state == 'empty') {
-      status = 'Empty';
-      badge = 'Refill now';
-      badgeBg = const Color(0xFFF8D7DA);
-      badgeText = const Color(0xFFDC3545);
-      barColor = const Color(0xFFDC3545);
-    } else if (state == 'low') {
-      status = 'Low';
-      badge = 'Refill soon';
-      badgeBg = const Color(0xFFFFF3CD);
-      badgeText = const Color(0xFF856404);
-      barColor = const Color(0xFFFFA500);
-    } else {
-      status = 'Has feed';
-      badge = 'OK';
-      badgeBg = const Color(0xFFD4EDDA);
-      badgeText = kStatusGreen;
-      barColor = kStatusGreen;
+      text = 'Sensor problem';
+      hint = 'Check its cable';
+      bg = const Color(0xFFF8D7DA);
+      fg = const Color(0xFFDC3545);
+    } else if (label == '--') {
+      fg = Colors.grey;
+    } else if (label == 'Empty') {
+      hint = 'Refill now';
+      bg = const Color(0xFFF8D7DA);
+      fg = const Color(0xFFDC3545);
+    } else if (label == 'Low') {
+      hint = isFeed ? 'Refill soon' : 'Please refill';
+      bg = const Color(0xFFFFF3CD);
+      fg = const Color(0xFFB26A00);
     }
 
     return Container(
-      width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: bg,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -752,58 +920,27 @@ class _FeedContainerCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.inventory_2, color: Colors.orange, size: 24),
-              SizedBox(width: 8),
-              Text('Feed Container',
-                  style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87)),
+              Icon(icon, color: iconColor, size: 22),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(title,
+                    style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87)),
+              ),
             ],
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Text(
-                percent != null && sensorOk
-                    ? '${percent.toStringAsFixed(0)}%'
-                    : '--',
-                style: const TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black),
-              ),
-              const SizedBox(width: 12),
-              Text(status,
-                  style: const TextStyle(fontSize: 16, color: Colors.black87)),
-              const Spacer(),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                    color: badgeBg, borderRadius: BorderRadius.circular(6)),
-                child: Text(badge,
-                    style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: badgeText)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: LinearProgressIndicator(
-              value: (percent != null && sensorOk)
-                  ? (percent / 100).clamp(0.0, 1.0)
-                  : 0,
-              minHeight: 8,
-              backgroundColor: const Color(0xFFF0F0F0),
-              valueColor: AlwaysStoppedAnimation<Color>(barColor),
-            ),
-          ),
+          Text(text,
+              style: TextStyle(
+                  fontSize: 22, fontWeight: FontWeight.bold, color: fg)),
+          const SizedBox(height: 4),
+          Text(hint,
+              style: TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w600, color: fg)),
         ],
       ),
     );

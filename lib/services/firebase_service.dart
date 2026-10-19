@@ -34,9 +34,10 @@ class FirebaseService {
 
   // ── Firebase database reference (root) ───────────────────────────────────
   final FirebaseDatabase _db = FirebaseDatabase.instanceFor(
-  app: Firebase.app(),
-  databaseURL: 'https://poultrycare-f816d-default-rtdb.asia-southeast1.firebasedatabase.app/',
-);
+    app: Firebase.app(),
+    databaseURL:
+        'https://poultrycare-f816d-default-rtdb.asia-southeast1.firebasedatabase.app/',
+  );
 
   // ── Pi online detection ──────────────────────────────────────────────────
   // The Pi can't write "offline" to Firebase when it loses WiFi, so the app
@@ -58,7 +59,8 @@ class FirebaseService {
   // ── Convenience getters for frequently-used references ───────────────────
   DatabaseReference get _sensorRef => _db.ref(AppConstants.dbSensorData);
   DatabaseReference get _actuatorsRef => _db.ref(AppConstants.dbActuators);
-  DatabaseReference get _deviceTokensRef => _db.ref(AppConstants.dbDeviceTokens);
+  DatabaseReference get _deviceTokensRef =>
+      _db.ref(AppConstants.dbDeviceTokens);
   DatabaseReference get _schedulesRef => _db.ref(AppConstants.dbSchedules);
   DatabaseReference get _logsRef => _db.ref(AppConstants.dbLogs);
   DatabaseReference get _settingsRef => _db.ref(AppConstants.dbSettings);
@@ -74,39 +76,39 @@ class FirebaseService {
     });
   }
 
-Stream<List<MapEntry<String, dynamic>>> notificationsStream({int limit = 50}) {
-  return FirebaseDatabase.instance
-      .ref('notifications')
-      .limitToLast(limit)
-      .onValue
-      .map((event) {
-    final raw = event.snapshot.value;
-    if (raw is! Map) return <MapEntry<String, dynamic>>[];
-    final entries = raw.entries
-        .map((e) => MapEntry(e.key.toString(), e.value))
-        .toList();
-    // Firebase push keys sort chronologically as strings.
-    entries.sort((a, b) => a.key.compareTo(b.key));
-    return entries.reversed.toList(); // newest first
-  });
-}
+  Stream<List<MapEntry<String, dynamic>>> notificationsStream({int limit = 50}) {
+    return FirebaseDatabase.instance
+        .ref('notifications')
+        .limitToLast(limit)
+        .onValue
+        .map((event) {
+      final raw = event.snapshot.value;
+      if (raw is! Map) return <MapEntry<String, dynamic>>[];
+      final entries = raw.entries
+          .map((e) => MapEntry(e.key.toString(), e.value))
+          .toList();
+      // Firebase push keys sort chronologically as strings.
+      entries.sort((a, b) => a.key.compareTo(b.key));
+      return entries.reversed.toList(); // newest first
+    });
+  }
 
   /// Marks key paths to stay cached locally even when no screen
-/// is actively listening — keeps dashboard/alerts usable offline.
-void enableOfflineSync() {
-  _sensorRef.keepSynced(true);
-  _actuatorsRef.keepSynced(true);
-  _schedulesRef.keepSynced(true);
-  _logsRef.keepSynced(true);
-  _thresholdsRef.keepSynced(true);
-}
+  /// is actively listening — keeps dashboard/alerts usable offline.
+  void enableOfflineSync() {
+    _sensorRef.keepSynced(true);
+    _actuatorsRef.keepSynced(true);
+    _schedulesRef.keepSynced(true);
+    _logsRef.keepSynced(true);
+    _thresholdsRef.keepSynced(true);
+  }
 
-/// Streams whether the PHONE has an active connection to Firebase.
-Stream<bool> connectionStream() {
-  return _db.ref('.info/connected').onValue.map((event) {
-    return event.snapshot.value as bool? ?? false;
-  });
-}
+  /// Streams whether the PHONE has an active connection to Firebase.
+  Stream<bool> connectionStream() {
+    return _db.ref('.info/connected').onValue.map((event) {
+      return event.snapshot.value as bool? ?? false;
+    });
+  }
 
   // ==========================================================================
   // SENSOR DATA — Real-time stream
@@ -171,7 +173,7 @@ Stream<bool> connectionStream() {
     return controller.stream;
   }
 
-    /// Returns a continuous Stream of [ActuatorState] that updates whenever
+  /// Returns a continuous Stream of [ActuatorState] that updates whenever
   /// the Pi's control loop changes a relay/servo state.
   Stream<ActuatorState> actuatorsStream() {
     return _actuatorsRef.onValue.map((event) {
@@ -186,42 +188,48 @@ Stream<bool> connectionStream() {
   // The Arduino listens to these paths and reacts accordingly.
   // ==========================================================================
 
-  Future<void> triggerManualFeed({int grams = AppConstants.defaultManualDispenseGrams, double? percent}) async {
+  Future<void> triggerManualFeed(
+      {int grams = AppConstants.defaultManualDispenseGrams,
+      double? percent}) async {
     await FirebaseDatabase.instance.ref('sensor_data').update({
       'feeder_active': true,
       'manual_dispense_grams': grams,
       if (percent != null) 'manual_dispense_percent': percent,
     });
   }
+
   /// Triggers a manual feed dispense sized from the user's saved
-/// "Manual Dispense Amount" setting (Settings screen), expressed
-/// as a % of hopper capacity.
-///
-/// This is ONLY for the app's own "Dispense Now" button — the LCD's
-/// physical button is a completely separate control path (it reads
-/// grams from a local file on the Pi, not from Firebase) and is not
-/// affected by this at all.
-Future<void> triggerManualFeedFromSettings() async {
-  int grams = AppConstants.defaultManualDispenseGrams;
+  /// "Manual Dispense Amount" setting (Settings screen), expressed
+  /// as a % of hopper capacity.
+  ///
+  /// This is ONLY for the app's own "Dispense Now" button — the LCD's
+  /// physical button is a completely separate control path (it reads
+  /// grams from a local file on the Pi, not from Firebase) and is not
+  /// affected by this at all.
+  Future<void> triggerManualFeedFromSettings() async {
+    int grams = AppConstants.defaultManualDispenseGrams;
 
-  try {
-    final thresholdSnap = await _thresholdsRef.get();
-    
-    if (thresholdSnap.exists) {
-      final thresholds = Map<String, dynamic>.from(thresholdSnap.value as Map);
-      final percent = (thresholds['manualDispensePercent'] as num?)?.toDouble();
-      final capacity = (thresholds['feedCapacityGrams'] as num?)?.toDouble()
-          ?? FeedingSchedule.fullFeedingGrams.toDouble();
-      if (percent != null) {
-        grams = FeedingSchedule.gramsFromPercent(percent, targetGrams: capacity.round());
+    try {
+      final thresholdSnap = await _thresholdsRef.get();
+
+      if (thresholdSnap.exists) {
+        final thresholds =
+            Map<String, dynamic>.from(thresholdSnap.value as Map);
+        final percent =
+            (thresholds['manualDispensePercent'] as num?)?.toDouble();
+        final capacity = (thresholds['feedCapacityGrams'] as num?)?.toDouble() ??
+            FeedingSchedule.fullFeedingGrams.toDouble();
+        if (percent != null) {
+          grams = FeedingSchedule.gramsFromPercent(percent,
+              targetGrams: capacity.round());
+        }
       }
+    } catch (_) {
+      // Fall back to the default rather than blocking the dispense.
     }
-  } catch (_) {
-    // Fall back to the default rather than blocking the dispense.
-  }
 
-  await triggerManualFeed(grams: grams);
-}
+    await triggerManualFeed(grams: grams);
+  }
 
   /// Turns the heating lamp ON (true) or OFF (false).
   Future<void> setHeatingLamp(bool isOn) async {
@@ -269,7 +277,7 @@ Future<void> triggerManualFeedFromSettings() async {
     ));
   }
 
-    /// Triggers a manual feed dispense of a specific gram amount.
+  /// Triggers a manual feed dispense of a specific gram amount.
   Future<void> quickDispenseGrams(double grams) async {
     await _sensorRef.update({
       'feeder_active': true,
@@ -279,7 +287,8 @@ Future<void> triggerManualFeedFromSettings() async {
       id: '',
       type: LogType.feeding,
       title: 'Manual Feed Dispense',
-      message: 'Quick dispense triggered (${grams.toStringAsFixed(0)}g) via mobile app.',
+      message:
+          'Quick dispense triggered (${grams.toStringAsFixed(0)}g) via mobile app.',
       timestamp: DateTime.now().millisecondsSinceEpoch,
     ));
   }
@@ -331,30 +340,30 @@ Future<void> triggerManualFeedFromSettings() async {
   }
 
   Future<Map<String, dynamic>> getThresholds() async {
-  final snap = await _thresholdsRef.get();
-  if (!snap.exists) return {};
-  return Map<String, dynamic>.from(snap.value as Map);
-}
+    final snap = await _thresholdsRef.get();
+    if (!snap.exists) return {};
+    return Map<String, dynamic>.from(snap.value as Map);
+  }
 
-Future<void> saveThreshold(String key, double value) async {
-  await _thresholdsRef.update({key: value});
-}
+  Future<void> saveThreshold(String key, double value) async {
+    await _thresholdsRef.update({key: value});
+  }
 
-Future<bool> getNotificationsEnabled() async {
-  final snap = await _notifRef.get();
-  return snap.exists ? (snap.value as bool) : true;
-}
+  Future<bool> getNotificationsEnabled() async {
+    final snap = await _notifRef.get();
+    return snap.exists ? (snap.value as bool) : true;
+  }
 
-Future<void> setNotificationsEnabled(bool value) async {
-  await _notifRef.set(value);
-}
+  Future<void> setNotificationsEnabled(bool value) async {
+    await _notifRef.set(value);
+  }
 
-/// Registers this device's FCM token so the Pi can send it push alerts.
-/// Stored as a map (token -> true) so multiple devices/phones can each
-/// have their own entry without overwriting each other.
-Future<void> saveDeviceToken(String token) async {
-  await _deviceTokensRef.child(token).set(true);
-}
+  /// Registers this device's FCM token so the Pi can send it push alerts.
+  /// Stored as a map (token -> true) so multiple devices/phones can each
+  /// have their own entry without overwriting each other.
+  Future<void> saveDeviceToken(String token) async {
+    await _deviceTokensRef.child(token).set(true);
+  }
 
   // ==========================================================================
   // ACTIVITY LOGS — write only (read is a stream)
@@ -421,6 +430,7 @@ Future<void> saveDeviceToken(String token) async {
   Future<void> clearAllLogs() async {
     await _logsRef.remove();
   }
+
   // ==========================================================================
   // SETTINGS — read and write
   // ==========================================================================
@@ -444,5 +454,34 @@ Future<void> saveDeviceToken(String token) async {
   /// Writes updated settings back to Firebase.
   Future<void> saveSettings(Map<String, dynamic> settings) async {
     await _settingsRef.update(settings);
+  }
+
+  // ==========================================================================
+  // GROWTH RECORDS — chicken progress report
+  // ==========================================================================
+
+  Stream<List<MapEntry<String, Map<String, dynamic>>>> growthRecordsStream() {
+    return _db.ref('growth_records').onValue.map((event) {
+      final raw = event.snapshot.value;
+      final list = <MapEntry<String, Map<String, dynamic>>>[];
+      if (raw is Map) {
+        raw.forEach((k, v) {
+          if (v is Map) {
+            list.add(MapEntry(k.toString(), Map<String, dynamic>.from(v)));
+          }
+        });
+      }
+      list.sort((a, b) => ((a.value['date'] as num?) ?? 0)
+          .compareTo((b.value['date'] as num?) ?? 0));
+      return list;
+    });
+  }
+
+  Future<void> addGrowthRecord(Map<String, dynamic> record) async {
+    await _db.ref('growth_records').push().set(record);
+  }
+
+  Future<void> deleteGrowthRecord(String id) async {
+    await _db.ref('growth_records/$id').remove();
   }
 }

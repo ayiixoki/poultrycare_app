@@ -33,7 +33,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // Humidity
   double _humidityLimit = 70.0;
 
-  // Feed level (relevant addition — see note below build method)
+  // Feed level
   double _feedAlertPercent = 30.0;
 
   // Notifications
@@ -84,7 +84,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _notificationsEnabled = notifEnabled;
         _isLoading = false;
 
-        _feedCapacityGrams = (data['feedCapacityGrams'] as num?)?.toDouble() ?? 150;
+        _feedCapacityGrams =
+            (data['feedCapacityGrams'] as num?)?.toDouble() ?? 150;
       });
     } catch (_) {
       setState(() => _isLoading = false);
@@ -146,19 +147,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 physics: const BouncingScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
                 children: [
-                  // ── Header ──────────────────────────────────
-                  const Text(
-                    'Settings',
-                    style: TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.black,
-                    ),
+                  // ── Header (with back button) ───────────────
+                  Row(
+                    children: [
+                      IconButton(
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        icon: const Icon(Icons.arrow_back_rounded),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text(
+                        'Settings',
+                        style: TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 4),
-                  const Text(
-                    'Adjust farm preferences',
-                    style: TextStyle(fontSize: 14, color: _subtitleGray),
+                  const Padding(
+                    padding: EdgeInsets.only(left: 40),
+                    child: Text(
+                      'Adjust farm preferences',
+                      style: TextStyle(fontSize: 14, color: _subtitleGray),
+                    ),
                   ),
                   const SizedBox(height: 20),
 
@@ -255,7 +270,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 12),
 
-                  // ── Feed Level Alert (relevant addition) ─────
+                  // ── Feed Level Alert ───────────────────────
                   _SliderCard(
                     cardColor: _card,
                     icon: Icons.grain_rounded,
@@ -359,7 +374,7 @@ class _NavCard extends StatelessWidget {
   }
 }
 
-// ── Slider card (matches photo style exactly) ───────────────────
+// ── Slider card ─────────────────────────────────────────────────
 class _SliderCard extends StatelessWidget {
   final Color cardColor;
   final IconData icon;

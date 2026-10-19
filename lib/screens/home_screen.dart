@@ -9,7 +9,7 @@ import 'dashboard_screen.dart';
 import 'feeding_screen.dart';
 import 'alerts_screen.dart';
 import 'logs_screen.dart';
-import 'settings_screen.dart';
+import 'progress_report_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -26,7 +26,7 @@ class _HomeScreenState extends State<HomeScreen> {
     FeedingScreen(),
     ClimateScreen(),
     LogsScreen(),
-    SettingsScreen(),
+    ProgressReportScreen(),
   ];
 
   // Returns user's display name or email prefix
@@ -44,7 +44,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _NavItem(icon: Icons.schedule_rounded, label: 'Schedule'),
     _NavItem(icon: Icons.notifications_rounded, label: 'Alerts'),
     _NavItem(icon: Icons.assignment_rounded, label: 'Logs'),
-    _NavItem(icon: Icons.settings_rounded, label: 'Settings'),
+    _NavItem(icon: Icons.show_chart_rounded, label: 'Progress'),
   ];
 
   @override
@@ -56,11 +56,8 @@ class _HomeScreenState extends State<HomeScreen> {
         children: _screens,
       ),
       bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: const Color.fromARGB(255, 233, 230, 224),
-          boxShadow: [
-            
-          ],
+        decoration: const BoxDecoration(
+          color: Color.fromARGB(255, 233, 230, 224),
         ),
         child: SafeArea(
           child: SizedBox(
@@ -78,7 +75,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? const Color.fromARGB(255, 240, 224, 132).withOpacity(0.12)
+                          ? const Color.fromARGB(255, 240, 224, 132)
+                              .withOpacity(0.12)
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(12),
                     ),
