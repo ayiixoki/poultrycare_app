@@ -114,28 +114,112 @@ Color _dueColor(List<_Rec> r) {
   return Colors.black;
 }
 
-// ── Parser: pastes like "OCT 2 / with system / purple 27 654" ──
+// ── Parser: reads any order / spacing ─────────────────────────
+// Understands lines like:
+//   purple 27 654      654 27 purple      27 purple 654
+//   purple27 654       purple 27cm 654g   purple,27,654
+//   purple 27654       (one number: first 2 digits = size, rest = weight)
+// The bigger number is the weight (g), the smaller is the size (cm).
 const _months = {
   'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
   'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
 };
 
+const _knownColors = {
+  'red', 'orange', 'yellow', 'green', 'blue', 'purple', 'brown', 'black',
+  'white', 'pink',
+};
+
+const _units = {
+  'cm', 'cms', 'mm', 'g', 'gr', 'gm', 'grm', 'gram', 'grams', 'kg',
+};
+
+final RegExp _mdRe = RegExp(
+    r'^([A-Za-z]{3,9})\.?\s*(\d{1,2})(?:st|nd|rd|th)?(?:\s*,?\s*(\d{4}))?$');
+final RegExp _dmRe = RegExp(
+    r'^(\d{1,2})(?:st|nd|rd|th)?\s*([A-Za-z]{3,9})\.?(?:\s*,?\s*(\d{4}))?$');
+
+// "OCT 2", "Oct 2, 2026", "2 Oct", "Oct2"
+DateTime? _lineDate(String line, DateTime now) {
+  int? mon;
+  int? day;
+  int? year;
+  final a = _mdRe.firstMatch(line);
+  if (a != null) {
+    mon = _months[a.group(1)!.toLowerCase().substring(0, 3)];
+    day = int.parse(a.group(2)!);
+    year = a.group(3) != null ? int.parse(a.group(3)!) : null;
+  } else {
+    final b = _dmRe.firstMatch(line);
+    if (b != null) {
+      day = int.parse(b.group(1)!);
+      mon = _months[b.group(2)!.toLowerCase().substring(0, 3)];
+      year = b.group(3) != null ? int.parse(b.group(3)!) : null;
+    }
+  }
+  if (mon == null || day == null || day < 1 || day > 31) return null;
+  var d = DateTime(year ?? now.year, mon, day);
+  if (year == null && d.isAfter(now.add(const Duration(days: 1)))) {
+    d = DateTime(now.year - 1, mon, day);
+  }
+  return d;
+}
+
+// One chicken line, any order. Returns tag -> size/weight, or null.
+MapEntry<String, _Ck>? _parseRow(String line) {
+  var s = line.toLowerCase();
+
+  // 1.5kg -> 1500
+  s = s.replaceAllMapped(RegExp(r'(\d+(?:\.\d+)?)\s*kg\b'), (m) {
+    return (double.parse(m.group(1)!) * 1000).toString();
+  });
+
+  final words = RegExp(r'[a-z]+')
+      .allMatches(s)
+      .map((m) => m.group(0)!)
+      .where((w) => !_units.contains(w))
+      .toList();
+  final nums = RegExp(r'\d+(?:\.\d+)?')
+      .allMatches(s)
+      .map((m) => m.group(0)!)
+      .toList();
+  if (words.isEmpty || nums.isEmpty) return null;
+
+  final tag = words.firstWhere(_knownColors.contains, orElse: () => words.first);
+
+  double size;
+  double weight;
+  if (nums.length == 2) {
+    final a = double.parse(nums[0]);
+    final b = double.parse(nums[1]);
+    size = a < b ? a : b;
+    weight = a < b ? b : a;
+  } else if (nums.length == 1 && !nums[0].contains('.') && nums[0].length >= 5) {
+    // no space at all, like purple27654
+    size = double.parse(nums[0].substring(0, 2));
+    weight = double.parse(nums[0].substring(2));
+  } else {
+    return null;
+  }
+  return MapEntry(tag, _Ck(size, weight));
+}
+
 Map<DateTime, Map<String, _Ck>> _parse(String text) {
   final result = <DateTime, Map<String, _Ck>>{};
-  final dateRe =
-      RegExp(r'^([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:\s*,?\s*(\d{4}))?$');
-  final rowRe = RegExp(r'^([A-Za-z]+)\s+(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)$');
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
 
   DateTime? current;
-  bool include = false;
-  final now = DateTime.now();
+  // Rows are accepted by default. Only a "w/out system" style section
+  // (old format) is skipped; "with system" is no longer needed.
+  bool include = true;
 
   for (final rawLine in text.split(RegExp(r'[\r\n]+'))) {
     final line = rawLine.trim();
     if (line.isEmpty) continue;
     final lower = line.toLowerCase();
 
-    // Section line: with system / w system / w/out system
+    // Old section markers: still understood, never required
     if (lower.contains('system')) {
       final without = lower.contains('w/out') ||
           lower.contains('without') ||
@@ -146,31 +230,19 @@ Map<DateTime, Map<String, _Ck>> _parse(String text) {
     }
 
     // Date line
-    final dm = dateRe.firstMatch(line);
-    if (dm != null) {
-      final mon = _months[dm.group(1)!.toLowerCase().substring(0, 3)];
-      if (mon != null) {
-        final day = int.parse(dm.group(2)!);
-        var year = dm.group(3) != null ? int.parse(dm.group(3)!) : now.year;
-        var d = DateTime(year, mon, day);
-        if (dm.group(3) == null &&
-            d.isAfter(now.add(const Duration(days: 1)))) {
-          d = DateTime(year - 1, mon, day);
-        }
-        current = d;
-        include = false; // wait for a "with system" line
-        continue;
-      }
+    final d = _lineDate(line, now);
+    if (d != null) {
+      current = d;
+      include = true;
+      continue;
     }
 
-    // Chicken row
-    final rm = rowRe.firstMatch(line);
-    if (rm != null && include && current != null) {
-      final tag = rm.group(1)!.toLowerCase();
-      final size = double.parse(rm.group(2)!);
-      final weight = double.parse(rm.group(3)!);
-      result.putIfAbsent(current, () => <String, _Ck>{})[tag] =
-          _Ck(size, weight);
+    // Chicken row (no date typed yet = today)
+    if (!include) continue;
+    final row = _parseRow(line);
+    if (row != null) {
+      result.putIfAbsent(current ?? today, () => <String, _Ck>{})[row.key] =
+          row.value;
     }
   }
   return result;
@@ -329,7 +401,7 @@ class ProgressReportScreen extends StatelessWidget {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
               content: Text(
-                  'No "with system" data found. Check the date lines (like OCT 2) and the rows (like purple 27 654).')),
+                  'Nothing readable found. Each chicken needs a color and two numbers (size and weight), like purple 27 654.')),
         );
       }
       return;
@@ -412,8 +484,8 @@ class ProgressReportScreen extends StatelessWidget {
                       backgroundColor: _gold,
                       foregroundColor: Colors.black,
                     ),
-                    icon: const Icon(Icons.content_paste_rounded, size: 18),
-                    label: const Text('Paste data'),
+                    icon: const Icon(Icons.edit_note_rounded, size: 20),
+                    label: const Text('Add data'),
                   ),
                 ],
               ),
@@ -455,7 +527,7 @@ class _EmptyState extends StatelessWidget {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
           const SizedBox(height: 6),
           Text(
-            'Tap "Paste data" and paste your measurements. The report is made for you.',
+            'Tap "Add data" and paste or type your measurements. The report is made for you.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
           ),
@@ -464,7 +536,7 @@ class _EmptyState extends StatelessWidget {
             onPressed: onAdd,
             style: FilledButton.styleFrom(
                 backgroundColor: _gold, foregroundColor: Colors.black),
-            child: const Text('Paste data'),
+            child: const Text('Add data'),
           ),
         ],
       ),
@@ -473,33 +545,109 @@ class _EmptyState extends StatelessWidget {
 }
 
 // ── The formal report ─────────────────────────────────────────
-class _ReportCard extends StatelessWidget {
+class _ReportCard extends StatefulWidget {
   final List<_Rec> recs;
   final String preparedFor;
   const _ReportCard({required this.recs, required this.preparedFor});
 
-  Future<void> _delete(BuildContext context, _Rec rec) async {
+  @override
+  State<_ReportCard> createState() => _ReportCardState();
+}
+
+class _ReportCardState extends State<_ReportCard> {
+  bool _selecting = false;
+  final Set<String> _selected = {};
+
+  // Deletes one or many records. [all] = true gives the stronger "harvest" warning.
+  Future<void> _confirmDelete(List<_Rec> toDelete, {bool all = false}) async {
+    if (toDelete.isEmpty) return;
+    final n = toDelete.length;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Delete ${_fmtDate(_date(rec.value))}?'),
-        content:
-            const Text('All chicken readings for this date will be removed.'),
+        title: Text(all
+            ? 'Delete ALL $n records?'
+            : n == 1
+                ? 'Delete ${_fmtDate(_date(toDelete.first.value))}?'
+                : 'Delete $n records?'),
+        content: Text(all
+            ? 'This removes every measurement for this batch. Use it when the chickens are harvested and you are starting a new batch. This cannot be undone.\n\nTip: tap "Copy report" first if you want to keep a copy.'
+            : 'All chicken readings for the selected date(s) will be removed. This cannot be undone.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
               child: const Text('Cancel')),
           FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Delete')),
+            style: FilledButton.styleFrom(backgroundColor: _red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(all ? 'Delete all' : 'Delete'),
+          ),
         ],
       ),
     );
-    if (ok == true) await FirebaseService().deleteGrowthRecord(rec.key);
+    if (ok != true) return;
+
+    try {
+      final svc = FirebaseService();
+      for (final r in toDelete) {
+        await svc.deleteGrowthRecord(r.key);
+      }
+      if (!mounted) return;
+      setState(() {
+        _selected.clear();
+        _selecting = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Deleted $n record${n > 1 ? 's' : ''}.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not delete. Try again.')),
+      );
+    }
+  }
+
+  void _toggle(String key) {
+    setState(() {
+      _selected.contains(key) ? _selected.remove(key) : _selected.add(key);
+    });
+  }
+
+  void _openDetail(int index) {
+    final recs = widget.recs;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _RecordDetailSheet(
+        rec: recs[index],
+        prev: index == 0 ? null : recs[index - 1],
+        index: index,
+        total: recs.length,
+        onDelete: () => _confirmDelete([recs[index]]),
+      ),
+    );
+  }
+
+  void _openChicken(String tag) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ChickenDetailSheet(tag: tag, recs: widget.recs),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final recs = widget.recs;
+    final preparedFor = widget.preparedFor;
+
+    // drop selections for records that no longer exist
+    _selected.retainAll(recs.map((e) => e.key));
+    final allSelected = recs.isNotEmpty && _selected.length == recs.length;
+
     final first = _chickens(recs.first.value);
     final last = _chickens(recs.last.value);
     final hasTrend = recs.length > 1;
@@ -611,40 +759,145 @@ class _ReportCard extends StatelessWidget {
                 const SizedBox(height: 22),
 
                 // 2. Flock average per date
-                _section('2. Flock Average Per Date'),
-                _avgHeader(),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text('2. Flock Average Per Date',
+                          style: TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.w800)),
+                    ),
+                    if (!_selecting)
+                      TextButton.icon(
+                        onPressed: () => setState(() => _selecting = true),
+                        icon: const Icon(Icons.checklist_rounded, size: 18),
+                        label: const Text('Select'),
+                      )
+                    else ...[
+                      TextButton(
+                        onPressed: () => setState(() {
+                          if (allSelected) {
+                            _selected.clear();
+                          } else {
+                            _selected
+                              ..clear()
+                              ..addAll(recs.map((e) => e.key));
+                          }
+                        }),
+                        child: Text(allSelected ? 'Clear' : 'Select all'),
+                      ),
+                      TextButton(
+                        onPressed: () => setState(() {
+                          _selecting = false;
+                          _selected.clear();
+                        }),
+                        child: const Text('Cancel'),
+                      ),
+                    ],
+                  ],
+                ),
+                if (!_selecting)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text('Tap a date to see its full details.',
+                        style: TextStyle(
+                            fontSize: 12, color: Colors.grey.shade600)),
+                  ),
+                _avgHeader(_selecting),
                 for (int i = 0; i < recs.length; i++)
-                  _avgRow(context, recs[i], i == 0 ? null : recs[i - 1]),
+                  _avgRow(context, recs[i], i == 0 ? null : recs[i - 1], i),
+                if (_selecting) ...[
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                          backgroundColor: _red,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14)),
+                      onPressed: _selected.isEmpty
+                          ? null
+                          : () => _confirmDelete(
+                                recs
+                                    .where((r) => _selected.contains(r.key))
+                                    .toList(),
+                                all: allSelected,
+                              ),
+                      icon: const Icon(Icons.delete_forever_rounded),
+                      label: Text(allSelected
+                          ? 'Delete all (${_selected.length})'
+                          : 'Delete selected (${_selected.length})'),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 22),
 
                 // 3. Individual chickens
                 _section('3. Individual Chickens (weight in grams)'),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 1),
+                        child: Icon(Icons.swap_horiz_rounded,
+                            size: 16, color: Colors.grey.shade600),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Swipe left or right to see all dates. Tap a chicken row to see its full history, or tap a date to see that day.',
+                          style: TextStyle(
+                              fontSize: 12, color: Colors.grey.shade600),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: DataTable(
-                    headingRowHeight: 36,
-                    dataRowMinHeight: 36,
-                    dataRowMaxHeight: 36,
+                    headingRowHeight: 44,
+                    dataRowMinHeight: 44,
+                    dataRowMaxHeight: 44,
+                    showCheckboxColumn: false,
+                    showBottomBorder: true,
                     columnSpacing: 18,
                     horizontalMargin: 8,
                     headingTextStyle: const TextStyle(
-                        fontSize: 11,
+                        fontSize: 13,
                         fontWeight: FontWeight.w700,
                         color: Colors.black54),
                     dataTextStyle:
-                        const TextStyle(fontSize: 12, color: Colors.black87),
+                        const TextStyle(fontSize: 14, color: Colors.black87),
                     columns: [
                       const DataColumn(label: Text('Tag')),
-                      for (final r in recs)
+                      for (int i = 0; i < recs.length; i++)
                         DataColumn(
-                            label: Text(_short(_date(r.value))), numeric: true),
+                          numeric: true,
+                          label: InkWell(
+                            onTap: () => _openDetail(i),
+                            borderRadius: BorderRadius.circular(6),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 4, vertical: 6),
+                              child: Text(
+                                _short(_date(recs[i].value)),
+                                style: const TextStyle(
+                                  decoration: TextDecoration.underline,
+                                  decorationStyle: TextDecorationStyle.dotted,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       const DataColumn(label: Text('Gain'), numeric: true),
-                        const DataColumn(
+                      DataColumn(
                           label: Text('Per $_intervalDays d'), numeric: true),
                     ],
                     rows: [
                       for (final t in tags)
-                        DataRow(cells: [
+                        DataRow(onSelectChanged: (_) => _openChicken(t), cells: [
                           DataCell(Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -781,69 +1034,447 @@ class _ReportCard extends StatelessWidget {
     );
   }
 
-  Widget _avgHeader() {
+  Widget _avgHeader(bool selecting) {
     const style = TextStyle(
-        fontSize: 11, fontWeight: FontWeight.w700, color: Colors.black54);
+        fontSize: 12, fontWeight: FontWeight.w700, color: Colors.black54);
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
       decoration: const BoxDecoration(
         color: Color(0xFFF0EFE6),
         borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
       ),
-      child: const Row(
+      child: Row(
         children: [
-          Expanded(flex: 28, child: Text('Date', style: style)),
-          Expanded(flex: 26, child: Text('Avg weight', style: style)),
-          Expanded(flex: 22, child: Text('Avg size', style: style)),
-          Expanded(flex: 24, child: Text('Change', style: style)),
-          SizedBox(width: 28),
+          if (selecting) const SizedBox(width: 32),
+          const Expanded(flex: 28, child: Text('Date', style: style)),
+          const Expanded(flex: 26, child: Text('Avg weight', style: style)),
+          const Expanded(flex: 22, child: Text('Avg size', style: style)),
+          const Expanded(flex: 24, child: Text('Change', style: style)),
+          if (!selecting) const SizedBox(width: 28),
         ],
       ),
     );
   }
 
-  Widget _avgRow(BuildContext context, _Rec rec, _Rec? prev) {
+  Widget _avgRow(BuildContext context, _Rec rec, _Rec? prev, int index) {
     final c = _chickens(rec.value);
     final change =
         prev == null ? null : _avgW(c) - _avgW(_chickens(prev.value));
-    const cell = TextStyle(fontSize: 12);
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-              flex: 28,
-              child: Text(DateFormat('MMM d, yy').format(_date(rec.value)),
-                  style: cell)),
-          Expanded(flex: 26, child: Text(_g(_avgW(c)), style: cell)),
-          Expanded(flex: 22, child: Text(_cm(_avgS(c)), style: cell)),
-          Expanded(
-            flex: 24,
-            child: Text(
-              change == null ? '--' : _sg(change),
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: change == null
-                    ? Colors.grey
-                    : (change >= 0 ? _green : _red),
+    const cell = TextStyle(fontSize: 14);
+    final checked = _selected.contains(rec.key);
+
+    return InkWell(
+      onTap: () => _selecting ? _toggle(rec.key) : _openDetail(index),
+      onLongPress: () => setState(() {
+        _selecting = true;
+        _selected.add(rec.key);
+      }),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
+        decoration: BoxDecoration(
+          color: checked ? _gold.withValues(alpha: 0.18) : null,
+          border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+        ),
+        child: Row(
+          children: [
+            if (_selecting)
+              SizedBox(
+                width: 32,
+                height: 32,
+                child: Checkbox(
+                  value: checked,
+                  activeColor: _gold,
+                  checkColor: Colors.black,
+                  onChanged: (_) => _toggle(rec.key),
+                ),
+              ),
+            Expanded(
+                flex: 28,
+                child: Text(DateFormat('MMM d, yy').format(_date(rec.value)),
+                    style: cell)),
+            Expanded(flex: 26, child: Text(_g(_avgW(c)), style: cell)),
+            Expanded(flex: 22, child: Text(_cm(_avgS(c)), style: cell)),
+            Expanded(
+              flex: 24,
+              child: Text(
+                change == null ? '--' : _sg(change),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: change == null
+                      ? Colors.grey
+                      : (change >= 0 ? _green : _red),
+                ),
               ),
             ),
-          ),
-          SizedBox(
-            width: 28,
-            height: 24,
-            child: IconButton(
-              padding: EdgeInsets.zero,
-              iconSize: 18,
-              icon: Icon(Icons.delete_outline, color: Colors.grey.shade500),
-              onPressed: () => _delete(context, rec),
+            if (!_selecting)
+              Icon(Icons.chevron_right_rounded,
+                  size: 20, color: Colors.grey.shade500),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Zoomed detail for one measurement date ────────────────────
+class _RecordDetailSheet extends StatelessWidget {
+  final _Rec rec;
+  final _Rec? prev;
+  final int index;
+  final int total;
+  final VoidCallback onDelete;
+  const _RecordDetailSheet({
+    required this.rec,
+    required this.prev,
+    required this.index,
+    required this.total,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = _chickens(rec.value);
+    final p = prev == null ? null : _chickens(prev!.value);
+    final wChange = p == null ? null : _avgW(c) - _avgW(p);
+    final sChange = p == null ? null : _avgS(c) - _avgS(p);
+    final tags = c.keys.toList()
+      ..sort((a, b) => c[b]!.weight.compareTo(c[a]!.weight));
+
+    Widget big(String label, String value, {Color? color}) => Expanded(
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF7F7F7),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style:
+                        TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                const SizedBox(height: 6),
+                Text(value,
+                    style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                        color: color ?? Colors.black)),
+              ],
             ),
           ),
-        ],
+        );
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.9,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (ctx, scroll) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: ListView(
+          controller: scroll,
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(_fmtDate(_date(rec.value)),
+                style:
+                    const TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 2),
+            Text(
+                'Measurement ${index + 1} of $total · ${c.length} chickens'
+                '${prev == null ? '' : ' · ${_date(rec.value).difference(_date(prev!.value)).inDays} days after previous'}',
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+            const SizedBox(height: 18),
+            Row(children: [
+              big('Average weight', _g(_avgW(c))),
+              const SizedBox(width: 10),
+              big('Average size', _cm(_avgS(c))),
+            ]),
+            const SizedBox(height: 10),
+            Row(children: [
+              big('Weight change', wChange == null ? '--' : _sg(wChange),
+                  color: wChange == null
+                      ? null
+                      : (wChange >= 0 ? _green : _red)),
+              const SizedBox(width: 10),
+              big('Size change', sChange == null ? '--' : _scm(sChange),
+                  color: sChange == null
+                      ? null
+                      : (sChange >= 0 ? _green : _red)),
+            ]),
+            const SizedBox(height: 24),
+            const Text('Each chicken',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 8),
+            for (final t in tags)
+              Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade200),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 18,
+                      height: 18,
+                      decoration: BoxDecoration(
+                          color: _tagColor(t), shape: BoxShape.circle),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(_cap(t),
+                              style: const TextStyle(
+                                  fontSize: 16, fontWeight: FontWeight.w700)),
+                          Text('Size ${_cm(c[t]!.size)}',
+                              style: TextStyle(
+                                  fontSize: 13, color: Colors.grey.shade600)),
+                        ],
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(_g(c[t]!.weight),
+                            style: const TextStyle(
+                                fontSize: 20, fontWeight: FontWeight.w800)),
+                        if (p != null && p[t] != null)
+                          Text(_sg(c[t]!.weight - p[t]!.weight),
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: c[t]!.weight >= p[t]!.weight
+                                      ? _green
+                                      : _red)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                  foregroundColor: _red,
+                  side: const BorderSide(color: _red),
+                  padding: const EdgeInsets.symmetric(vertical: 14)),
+              onPressed: () {
+                Navigator.pop(context);
+                onDelete();
+              },
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Delete this date'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Zoomed history for one chicken ────────────────────────────
+class _Pt {
+  final DateTime date;
+  final _Ck ck;
+  const _Pt(this.date, this.ck);
+}
+
+class _ChickenDetailSheet extends StatelessWidget {
+  final String tag;
+  final List<_Rec> recs;
+  const _ChickenDetailSheet({required this.tag, required this.recs});
+
+  @override
+  Widget build(BuildContext context) {
+    final pts = <_Pt>[
+      for (final r in recs)
+        if (_chickens(r.value)[tag] != null)
+          _Pt(_date(r.value), _chickens(r.value)[tag]!),
+    ];
+    if (pts.isEmpty) return const SizedBox.shrink();
+
+    final first = pts.first;
+    final last = pts.last;
+    final days = last.date.difference(first.date).inDays;
+    final hasTrend = pts.length > 1;
+    final wGain = last.ck.weight - first.ck.weight;
+    final sGain = last.ck.size - first.ck.size;
+    final perDay = days > 0 ? wGain / days : null;
+
+    // compare with the flock on the latest date
+    final flock = _chickens(recs.last.value);
+    final flockAvg = _avgW(flock);
+    final vsFlock = last.ck.weight - flockAvg;
+    final ranked = flock.keys.toList()
+      ..sort((a, b) => flock[b]!.weight.compareTo(flock[a]!.weight));
+    final rank = ranked.indexOf(tag) + 1;
+
+    Widget big(String label, String value, {Color? color}) => Expanded(
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF7F7F7),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style:
+                        TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                const SizedBox(height: 6),
+                Text(value,
+                    style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: color ?? Colors.black)),
+              ],
+            ),
+          ),
+        );
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.9,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (ctx, scroll) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: ListView(
+          controller: scroll,
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Container(
+                  width: 26,
+                  height: 26,
+                  decoration: BoxDecoration(
+                      color: _tagColor(tag), shape: BoxShape.circle),
+                ),
+                const SizedBox(width: 12),
+                Text('${_cap(tag)} tag',
+                    style: const TextStyle(
+                        fontSize: 26, fontWeight: FontWeight.w800)),
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(
+                '${pts.length} measurement${pts.length > 1 ? 's' : ''} · ${_fmtDate(first.date)} to ${_fmtDate(last.date)}',
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+            const SizedBox(height: 18),
+            Row(children: [
+              big('Latest weight', _g(last.ck.weight)),
+              const SizedBox(width: 10),
+              big('Latest size', _cm(last.ck.size)),
+            ]),
+            const SizedBox(height: 10),
+            Row(children: [
+              big('Total weight gain', hasTrend ? _sg(wGain) : '--',
+                  color: hasTrend ? (wGain >= 0 ? _green : _red) : null),
+              const SizedBox(width: 10),
+              big('Total size growth', hasTrend ? _scm(sGain) : '--',
+                  color: hasTrend ? (sGain >= 0 ? _green : _red) : null),
+            ]),
+            const SizedBox(height: 10),
+            Row(children: [
+              big('Gain per $_intervalDays days',
+                  perDay == null ? '--' : _sg(perDay * _intervalDays)),
+              const SizedBox(width: 10),
+              big('Gain per day',
+                  perDay == null ? '--' : '${perDay.toStringAsFixed(1)} g'),
+            ]),
+            const SizedBox(height: 10),
+            Row(children: [
+              big('Vs flock average', _sg(vsFlock),
+                  color: vsFlock >= 0 ? _green : _red),
+              const SizedBox(width: 10),
+              big('Rank (heaviest)',
+                  rank > 0 ? '$rank of ${ranked.length}' : '--'),
+            ]),
+            const SizedBox(height: 24),
+            const Text('History',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 8),
+            for (int i = pts.length - 1; i >= 0; i--)
+              Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade200),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(_fmtDate(pts[i].date),
+                              style: const TextStyle(
+                                  fontSize: 16, fontWeight: FontWeight.w700)),
+                          Text('Size ${_cm(pts[i].ck.size)}',
+                              style: TextStyle(
+                                  fontSize: 13, color: Colors.grey.shade600)),
+                        ],
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(_g(pts[i].ck.weight),
+                            style: const TextStyle(
+                                fontSize: 20, fontWeight: FontWeight.w800)),
+                        if (i > 0)
+                          Text(
+                              _sg(pts[i].ck.weight - pts[i - 1].ck.weight),
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: pts[i].ck.weight >=
+                                          pts[i - 1].ck.weight
+                                      ? _green
+                                      : _red))
+                        else
+                          Text('first reading',
+                              style: TextStyle(
+                                  fontSize: 12, color: Colors.grey.shade500)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -877,7 +1508,7 @@ class _PasteDialogState extends State<_PasteDialog> {
     final readings = preview.values.fold<int>(0, (s, m) => s + m.length);
 
     return AlertDialog(
-      title: const Text('Paste your data'),
+      title: const Text('Add your data'),
       content: SizedBox(
         width: double.maxFinite,
         child: SingleChildScrollView(
@@ -886,7 +1517,7 @@ class _PasteDialogState extends State<_PasteDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Paste all dates at once. Only the "with system" rows are used. "w/out system" rows are skipped.',
+                'Paste or type your measurements. One chicken per line: color, size (cm) and weight (g) in any order, with or without spaces. Put a date line like OCT 2 above each group (no date = today).',
                 style: TextStyle(fontSize: 12, color: Colors.black54),
               ),
               const SizedBox(height: 10),
@@ -900,11 +1531,13 @@ class _PasteDialogState extends State<_PasteDialog> {
                 controller: _c,
                 maxLines: 10,
                 minLines: 6,
+                keyboardType: TextInputType.multiline,
+                textCapitalization: TextCapitalization.none,
                 onChanged: (_) => setState(() {}),
                 style: const TextStyle(fontSize: 13),
                 decoration: const InputDecoration(
                   border: OutlineInputBorder(),
-                  hintText: 'OCT 2\nwith system\npurple 27 654\n...',
+                  hintText: 'OCT 2\npurple 27 654\n654 blue 31\nred27 598\n...',
                 ),
               ),
               const SizedBox(height: 8),
@@ -919,6 +1552,31 @@ class _PasteDialogState extends State<_PasteDialog> {
                     fontWeight: FontWeight.w600,
                     color: preview.isEmpty ? _red : _green),
               ),
+              if (preview.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                const Text('What the app understood:',
+                    style:
+                        TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                Container(
+                  width: double.infinity,
+                  constraints: const BoxConstraints(maxHeight: 140),
+                  margin: const EdgeInsets.only(top: 6),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF7F7F7),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: SingleChildScrollView(
+                    child: Text(
+                      (preview.keys.toList()..sort())
+                          .map((d) =>
+                              '${_fmtDate(d)}\n${preview[d]!.entries.map((e) => '  ${_cap(e.key)}: ${_cm(e.value.size)}, ${_g(e.value.weight)}').join('\n')}')
+                          .join('\n\n'),
+                      style: const TextStyle(fontSize: 12, height: 1.4),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
